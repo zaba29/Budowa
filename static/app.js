@@ -119,7 +119,28 @@ function setupDragAndDrop() {
     });
 }
 
+function setupImportDialog() {
+    const trigger = document.querySelector('[data-open-import]');
+    const dialog = document.getElementById('import-dialog');
+    if (!trigger || !dialog) {
+        return;
+    }
+
+    const cancel = document.getElementById('cancel-import');
+
+    trigger.addEventListener('click', () => {
+        dialog.showModal();
+    });
+
+    if (cancel) {
+        cancel.addEventListener('click', () => {
+            dialog.close();
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     setupEditDialog();
     setupDragAndDrop();
+    setupImportDialog();
 });

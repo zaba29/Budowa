@@ -14,7 +14,8 @@
         </div>
         {% if current_user %}
         <nav class="main-nav">
-            <a href="{{ url_for('index') }}" class="nav-link">Wydatki</a>
+            <a href="{{ url_for('index') }}" class="nav-link">Panel główny</a>
+            <a href="{{ url_for('history') }}" class="nav-link">Historia wydatków</a>
             {% if permissions.get('can_view_reports') %}
             <a href="{{ url_for('reports') }}" class="nav-link">Raporty</a>
             {% endif %}

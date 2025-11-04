@@ -43,6 +43,14 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
 - Domyślne dane logowania można nadpisać przez ustawienie zmiennych środowiskowych `APP_USERNAME` i `APP_PASSWORD`.
 - Do generowania innego klucza sesji ustaw zmienną `SECRET_KEY`.
 
+## Funkcje aplikacji
+
+- Panel główny z formularzem dodawania wydatków, podsumowaniem według etapów (ETAP 0–ETAP 5) i typów (Materiały, Zaliczka, Usługa, Robocizna, Inne).
+- Osobna zakładka **Historia wydatków** z możliwością sortowania, edycji, przeciągania pozycji, importu z Excela i eksportu do Excela.
+- Import wymaga pliku `.xlsx` z nagłówkami w pierwszym wierszu: `Data`, `Odbiorca`, `Kwota`, `Etap`, `Typ wydatku`, `Notatki`, `Bank`, `Opis`.
+- Eksport jednym kliknięciem zapisuje wszystkie wydatki w pliku `wydatki_budowa.xlsx` gotowym do otwarcia w Excelu.
+- Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz strona raportów z wykresami (Chart.js).
+
 ## Instrukcja krok po kroku dla macOS (dla początkujących)
 
 1. **Otwórz Terminal.** Kliknij lupę Spotlight (w prawym górnym rogu ekranu), wpisz `Terminal` i naciśnij Enter.

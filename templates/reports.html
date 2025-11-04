@@ -24,7 +24,7 @@ const typeValues = {{ type_values|tojson }};
 const monthLabels = {{ month_labels|tojson }};
 const monthValues = {{ month_values|tojson }};
 
-const palette = ['#1f6feb', '#0ea5e9', '#10b981', '#f97316', '#ef4444', '#6366f1'];
+const palette = ['#38bdf8', '#0ea5e9', '#22d3ee', '#a855f7', '#f97316', '#facc15'];
 
 const stageCtx = document.getElementById('stageChart');
 if (stageCtx) {
@@ -42,6 +42,17 @@ if (stageCtx) {
             scales: {
                 y: {
                     beginAtZero: true,
+                    ticks: { color: '#e2e8f0' },
+                    grid: { color: 'rgba(148, 163, 184, 0.25)' },
+                },
+                x: {
+                    ticks: { color: '#e2e8f0' },
+                    grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                },
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#e2e8f0' },
                 },
             },
         },
@@ -81,6 +92,17 @@ if (timelineCtx) {
             scales: {
                 y: {
                     beginAtZero: true,
+                    ticks: { color: '#e2e8f0' },
+                    grid: { color: 'rgba(148, 163, 184, 0.25)' },
+                },
+                x: {
+                    ticks: { color: '#e2e8f0' },
+                    grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                },
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#e2e8f0' },
                 },
             },
         },

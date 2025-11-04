@@ -1,6 +1,8 @@
 import os
 import sqlite3
+from datetime import date, datetime
 from functools import wraps
+from io import BytesIO
 from typing import Dict, List
 
 from flask import (
@@ -12,9 +14,12 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 EXPENSE_TYPES: List[str] = ["Materialy", "Zaliczka", "Usluga", "Robocizna", "Inne"]
 CATEGORIES: List[str] = [f"ETAP {i}" for i in range(6)]
@@ -198,6 +203,46 @@ def create_app() -> Flask:
             """
         ).fetchall()
 
+    def fetch_expenses(
+        db: sqlite3.Connection, requested_sort: str, direction: str
+    ) -> tuple[list[sqlite3.Row], str, str]:
+        sort_map = {
+            "display_order": "display_order",
+            "date": "expense_date",
+            "amount": "amount",
+            "category": "category",
+            "type": "expense_type",
+            "merchant": "merchant",
+        }
+        sort_column = sort_map.get(requested_sort, "display_order")
+        normalized_direction = direction.lower()
+        if sort_column == "display_order":
+            normalized_direction = "asc"
+        elif normalized_direction not in {"asc", "desc"}:
+            normalized_direction = "asc"
+
+        rows = db.execute(
+            f"SELECT * FROM expenses ORDER BY {sort_column} {normalized_direction.upper()}, id ASC"
+        ).fetchall()
+        return rows, sort_column, normalized_direction
+
+    def parse_excel_date(value) -> str:
+        if value is None:
+            raise ValueError("Brak daty")
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, str):
+            stripped = value.strip()
+            for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+                try:
+                    return datetime.strptime(stripped, fmt).date().isoformat()
+                except ValueError:
+                    continue
+            raise ValueError("Nieprawidłowy format daty")
+        raise ValueError("Nieobsługiwany format daty")
+
     @app.context_processor
     def inject_globals() -> Dict[str, object]:
         return {
@@ -237,25 +282,7 @@ def create_app() -> Flask:
     @login_required
     def index():
         db = get_db()
-        sort_map = {
-            "display_order": "display_order",
-            "date": "expense_date",
-            "amount": "amount",
-            "category": "category",
-            "type": "expense_type",
-            "merchant": "merchant",
-        }
-        requested_sort = request.args.get("sort", "display_order")
-        sort_column = sort_map.get(requested_sort, "display_order")
-        direction = request.args.get("direction", "asc").lower()
-        if sort_column == "display_order":
-            direction = "asc"
-        elif direction not in {"asc", "desc"}:
-            direction = "asc"
-        expenses_rows = db.execute(
-            f"SELECT * FROM expenses ORDER BY {sort_column} {direction.upper()}, id ASC"
-        ).fetchall()
-        expenses = [dict(row) for row in expenses_rows]
+        expenses_rows, _, _ = fetch_expenses(db, "display_order", "asc")
 
         category_totals = fetch_category_totals(db)
         type_totals = fetch_type_totals(db)
@@ -263,12 +290,26 @@ def create_app() -> Flask:
 
         return render_template(
             "index.html",
-            expenses=expenses,
             category_totals=category_totals,
             type_totals=type_totals,
             total_cost=total_cost,
+        )
+
+    @app.route("/history")
+    @login_required
+    def history():
+        db = get_db()
+        requested_sort = request.args.get("sort", "display_order")
+        direction = request.args.get("direction", "asc")
+        expenses_rows, _, normalized_direction = fetch_expenses(
+            db, requested_sort, direction
+        )
+        expenses = [dict(row) for row in expenses_rows]
+        return render_template(
+            "history.html",
+            expenses=expenses,
             current_sort=requested_sort,
-            current_direction=direction,
+            current_direction=normalized_direction,
         )
 
     @app.post("/expenses")
@@ -347,7 +388,7 @@ def create_app() -> Flask:
             amount = parse_amount(amount_raw)
         except ValueError as exc:
             flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return redirect(url_for("history"))
 
         if (
             not expense_date
@@ -358,7 +399,7 @@ def create_app() -> Flask:
             or category not in CATEGORIES
         ):
             flash("Proszę uzupełnić wymagane pola poprawnymi wartościami.", "error")
-            return redirect(url_for("index"))
+            return redirect(url_for("history"))
 
         db = get_db()
         db.execute(
@@ -388,7 +429,7 @@ def create_app() -> Flask:
         )
         db.commit()
         flash("Wydatek został zaktualizowany.", "success")
-        return redirect(url_for("index"))
+        return redirect(url_for("history"))
 
     @app.post("/expenses/<int:expense_id>/delete")
     @login_required
@@ -398,7 +439,7 @@ def create_app() -> Flask:
         db.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
         db.commit()
         flash("Wpis został usunięty.", "success")
-        return redirect(url_for("index"))
+        return redirect(url_for("history"))
 
     @app.post("/expenses/reorder")
     @login_required
@@ -420,6 +461,168 @@ def create_app() -> Flask:
             )
         db.commit()
         return ("", 204)
+
+    @app.get("/expenses/export")
+    @login_required
+    def export_expenses():
+        db = get_db()
+        expenses_rows, _, _ = fetch_expenses(db, "display_order", "asc")
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Wydatki"
+        headers = [
+            "Data",
+            "Odbiorca",
+            "Kwota",
+            "Etap",
+            "Typ wydatku",
+            "Notatki",
+            "Bank",
+            "Opis",
+        ]
+        sheet.append(headers)
+        for row in expenses_rows:
+            sheet.append(
+                [
+                    row["expense_date"],
+                    row["merchant"],
+                    float(row["amount"]),
+                    row["category"],
+                    row["expense_type"],
+                    row["notes"] or "",
+                    row["bank"] or "",
+                    row["description"] or "",
+                ]
+            )
+
+        stream = BytesIO()
+        workbook.save(stream)
+        stream.seek(0)
+        filename = "wydatki_budowa.xlsx"
+        return send_file(
+            stream,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.post("/expenses/import")
+    @login_required
+    @permission_required("can_add")
+    def import_expenses():
+        uploaded = request.files.get("file")
+        if uploaded is None or uploaded.filename == "":
+            flash("Wybierz plik w formacie XLSX.", "error")
+            return redirect(url_for("history"))
+
+        try:
+            workbook = load_workbook(uploaded, data_only=True)
+        except InvalidFileException:
+            flash("Nie udało się odczytać pliku. Upewnij się, że to plik .xlsx.", "error")
+            return redirect(url_for("history"))
+
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows:
+            flash("Plik jest pusty.", "error")
+            return redirect(url_for("history"))
+
+        header = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
+        expected = {
+            "data": "expense_date",
+            "odbiorca": "merchant",
+            "kwota": "amount",
+            "etap": "category",
+            "typ wydatku": "expense_type",
+            "notatki": "notes",
+            "bank": "bank",
+            "opis": "description",
+        }
+        header_map = {}
+        for label, field in expected.items():
+            try:
+                index = header.index(label)
+            except ValueError:
+                flash(
+                    "Brakuje kolumny '" + label + "' w nagłówku arkusza.",
+                    "error",
+                )
+                return redirect(url_for("history"))
+            header_map[field] = index
+
+        db = get_db()
+        max_order_row = db.execute(
+            "SELECT COALESCE(MAX(display_order), -1) AS max_order FROM expenses"
+        ).fetchone()
+        current_max = max_order_row["max_order"] if max_order_row is not None else -1
+
+        inserted = 0
+        skipped = 0
+
+        for data_row in rows[1:]:
+            if data_row is None:
+                continue
+            values = {field: data_row[idx] if idx < len(data_row) else None for field, idx in header_map.items()}
+            if all(value in (None, "") for value in values.values()):
+                continue
+            try:
+                expense_date = parse_excel_date(values["expense_date"])
+                merchant = (values["merchant"] or "").strip()
+                expense_type_raw = (values["expense_type"] or "").strip()
+                category_raw = (values["category"] or "").strip()
+                category = category_raw.upper()
+                expense_type = next(
+                    (
+                        option
+                        for option in EXPENSE_TYPES
+                        if option.lower() == expense_type_raw.lower()
+                    ),
+                    expense_type_raw,
+                )
+                notes = (values["notes"] or "").strip()
+                bank = (values["bank"] or "").strip()
+                description = (values["description"] or "").strip()
+                amount_raw = values["amount"]
+                if amount_raw is None or str(amount_raw).strip() == "":
+                    raise ValueError("Brak kwoty")
+                amount = parse_amount(str(amount_raw))
+
+                if not merchant or category not in CATEGORIES or expense_type not in EXPENSE_TYPES:
+                    raise ValueError("Niepoprawne dane w wierszu")
+
+                current_max += 1
+                db.execute(
+                    """
+                    INSERT INTO expenses (
+                        expense_date, merchant, amount, category, notes, bank, description,
+                        expense_type, display_order
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        expense_date,
+                        merchant,
+                        amount,
+                        category,
+                        notes,
+                        bank,
+                        description,
+                        expense_type,
+                        current_max,
+                    ),
+                )
+                inserted += 1
+            except Exception:
+                skipped += 1
+
+        db.commit()
+        if inserted:
+            flash(
+                f"Zaimportowano {inserted} pozycji. Pominięto {skipped} wierszy.",
+                "success" if skipped == 0 else "info",
+            )
+        else:
+            flash("Nie udało się zaimportować żadnych danych z pliku.", "error")
+        return redirect(url_for("history"))
 
     @app.route("/users")
     @login_required

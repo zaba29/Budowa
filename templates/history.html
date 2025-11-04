@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}Historia wydatków{% endblock %}
+{% block content %}
+<section class="card glass">
+    <div class="section-header">
+        <div>
+            <h2>Historia wydatków</h2>
+            <p class="muted">Przeglądaj, edytuj i porządkuj zapisane pozycje.</p>
+        </div>
+        <div class="actions">
+            <a href="{{ url_for('export_expenses') }}" class="button primary" download>
+                Eksport do Excel
+            </a>
+            {% if permissions.get('can_add') %}
+            <button type="button" class="button outline" data-open-import>
+                Import z Excel
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="table-controls">
+        <form method="get" class="sort-form">
+            <label for="sort">Sortuj według</label>
+            <select name="sort" id="sort">
+                <option value="display_order" {% if current_sort == 'display_order' %}selected{% endif %}>Kolejność własna</option>
+                <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Data</option>
+                <option value="amount" {% if current_sort == 'amount' %}selected{% endif %}>Kwota</option>
+                <option value="category" {% if current_sort == 'category' %}selected{% endif %}>Etap</option>
+                <option value="type" {% if current_sort == 'type' %}selected{% endif %}>Typ wydatku</option>
+                <option value="merchant" {% if current_sort == 'merchant' %}selected{% endif %}>Odbiorca</option>
+            </select>
+            <label for="direction">Kierunek</label>
+            <select name="direction" id="direction" {% if current_sort == 'display_order' %}disabled{% endif %}>
+                <option value="asc" {% if current_direction == 'asc' %}selected{% endif %}>Rosnąco</option>
+                <option value="desc" {% if current_direction == 'desc' %}selected{% endif %}>Malejąco</option>
+            </select>
+            <button type="submit" class="button">Sortuj</button>
+        </form>
+        {% if permissions.get('can_edit') %}
+        <p class="muted drag-hint">Przeciągnij pozycję, aby zmienić kolejność.</p>
+        {% endif %}
+    </div>
+    <div class="table-wrapper">
+        <table data-expenses-table data-reorder-url="{{ url_for('reorder_expenses') }}" data-can-reorder="{{ 'true' if permissions.get('can_edit') else 'false' }}">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Data</th>
+                    <th>Odbiorca</th>
+                    <th>Kwota</th>
+                    <th>Etap</th>
+                    <th>Typ wydatku</th>
+                    <th>Notatki</th>
+                    <th>Bank</th>
+                    <th>Opis</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in expenses %}
+                <tr class="draggable-row" data-expense-id="{{ expense.id }}" data-expense='{{ expense|tojson }}' data-update-url="{{ url_for('update_expense', expense_id=expense.id) }}'>
+                    <td class="drag-cell">{% if permissions.get('can_edit') %}<span class="drag-handle" title="Złap i przeciągnij">⋮⋮</span>{% endif %}</td>
+                    <td>{{ expense.expense_date }}</td>
+                    <td>{{ expense.merchant }}</td>
+                    <td>{{ '%.2f'|format(expense.amount) }} PLN</td>
+                    <td>{{ expense.category }}</td>
+                    <td>{{ expense.expense_type }}</td>
+                    <td>{{ expense.notes or '-' }}</td>
+                    <td>{{ expense.bank or '-' }}</td>
+                    <td>{{ expense.description or '-' }}</td>
+                    <td class="actions">
+                        {% if permissions.get('can_edit') %}
+                        <button type="button" class="button" data-action="edit">Edytuj</button>
+                        {% endif %}
+                        {% if permissions.get('can_delete') %}
+                        <form method="post" action="{{ url_for('delete_expense', expense_id=expense.id) }}" onsubmit="return confirm('Na pewno usunąć ten wpis?');">
+                            <button type="submit" class="button danger">Usuń</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" class="empty">Brak zapisanych wydatków. Dodaj pierwszy wpis w panelu głównym.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="edit-dialog" class="modal">
+    <form method="post" id="edit-expense-form" class="form-grid">
+        <h3>Edytuj wydatek</h3>
+        <input type="hidden" name="_method" value="update">
+        <label for="edit_expense_date">Data</label>
+        <input type="date" id="edit_expense_date" name="expense_date" required>
+
+        <label for="edit_merchant">Odbiorca</label>
+        <input id="edit_merchant" name="merchant" required>
+
+        <label for="edit_amount">Kwota (PLN)</label>
+        <input id="edit_amount" name="amount" required>
+
+        <label for="edit_category">Etap</label>
+        <select id="edit_category" name="category" required>
+            {% for category in categories %}
+            <option value="{{ category }}">{{ category }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="edit_expense_type">Typ wydatku</label>
+        <select id="edit_expense_type" name="expense_type" required>
+            {% for label in expense_types %}
+            <option value="{{ label }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="edit_notes">Notatki</label>
+        <input id="edit_notes" name="notes">
+
+        <label for="edit_bank">Bank / forma płatności</label>
+        <input id="edit_bank" name="bank">
+
+        <label for="edit_description">Opis</label>
+        <textarea id="edit_description" name="description" rows="2"></textarea>
+
+        <div class="form-actions">
+            <button type="submit" class="button primary">Zapisz</button>
+            <button type="button" class="button" id="cancel-edit">Anuluj</button>
+        </div>
+    </form>
+</dialog>
+
+{% if permissions.get('can_add') %}
+<dialog id="import-dialog" class="modal">
+    <form method="post" action="{{ url_for('import_expenses') }}" enctype="multipart/form-data" class="form-grid single">
+        <h3>Import z pliku Excel</h3>
+        <p class="muted">
+            Aby przygotować plik w Excelu:
+        </p>
+        <ol class="import-steps">
+            <li>Otwórz swój arkusz z wydatkami w programie Excel.</li>
+            <li>Ustaw w pierwszym wierszu nagłówki w kolejności: Data, Odbiorca, Kwota, Etap, Typ wydatku, Notatki, Bank, Opis.</li>
+            <li>Upewnij się, że kolumna „Kwota” zawiera wartości liczbowe, a kolumna „Etap” jedną z opcji ETAP 0–ETAP 5.</li>
+            <li>Wybierz <strong>Plik &gt; Zapisz jako</strong> i zapisz plik w formacie <strong>Skoroszyt programu Excel (*.xlsx)</strong>.</li>
+            <li>Załaduj zapisany plik poniżej i kliknij „Importuj”.</li>
+        </ol>
+        <label for="import-file" class="full-width">Plik Excel (.xlsx)</label>
+        <input type="file" id="import-file" name="file" accept=".xlsx" required class="full-width">
+        <div class="form-actions">
+            <button type="submit" class="button primary">Importuj</button>
+            <button type="button" class="button" id="cancel-import">Anuluj</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+{% endblock %}
