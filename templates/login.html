@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Logowanie - Budowa{% endblock %}
+{% block content %}
+<section class="auth-card">
+    <h2>Zaloguj się</h2>
+    <form method="post" class="form-grid">
+        <label for="username">Użytkownik</label>
+        <input id="username" name="username" required autofocus>
+
+        <label for="password">Hasło</label>
+        <input id="password" name="password" type="password" required>
+
+        <button type="submit" class="button primary">Zaloguj</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}Wydatki budowlane{% endblock %}
+{% block content %}
+<div class="dashboard">
+    <section class="card">
+        <h2>Dodaj wydatek</h2>
+        <form method="post" action="{{ url_for('add_expense') }}" class="form-grid">
+            <label for="expense_date">Data</label>
+            <input type="date" id="expense_date" name="expense_date" required>
+
+            <label for="merchant">Odbiorca</label>
+            <input id="merchant" name="merchant" placeholder="np. Sklep budowlany" required>
+
+            <label for="amount">Kwota (PLN)</label>
+            <input type="text" id="amount" name="amount" placeholder="0,00" required>
+
+            <label for="category">Etap</label>
+            <select id="category" name="category" required>
+                <option value="" disabled selected>Wybierz etap</option>
+                {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="expense_type">Typ wydatku</label>
+            <select id="expense_type" name="expense_type" required>
+                <option value="" disabled selected>Wybierz typ</option>
+                {% for expense_type in expense_types %}
+                <option value="{{ expense_type }}">{{ expense_type }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="notes">Notatki</label>
+            <input id="notes" name="notes" placeholder="krótka notatka">
+
+            <label for="bank">Bank / forma płatności</label>
+            <input id="bank" name="bank" placeholder="np. Gotówka, Alior Bank">
+
+            <label for="description">Opis szczegółowy</label>
+            <textarea id="description" name="description" rows="2" placeholder="szczegóły wydatku"></textarea>
+
+            <button type="submit" class="button primary full-width">Zapisz</button>
+        </form>
+    </section>
+
+    <aside class="card summary">
+        <h2>Podsumowanie</h2>
+        <p class="total">Łącznie: <strong>{{ '%.2f'|format(total_cost) }} PLN</strong></p>
+
+        <h3>Koszt według etapu</h3>
+        <ul>
+            {% for category in categories %}
+            <li>
+                <span>{{ category }}</span>
+                <strong>{{ '%.2f'|format(category_totals.get(category, 0)) }} PLN</strong>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <h3>Typ wydatku</h3>
+        <ul>
+            {% for label, value in type_totals.items() %}
+            <li>
+                <span>{{ label }}</span>
+                <strong>{{ '%.2f'|format(value) }} PLN</strong>
+            </li>
+            {% endfor %}
+        </ul>
+    </aside>
+</div>
+
+<section class="card">
+    <h2>Historia wydatków</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Odbiorca</th>
+                    <th>Kwota</th>
+                    <th>Etap</th>
+                    <th>Typ wydatku</th>
+                    <th>Notatki</th>
+                    <th>Bank</th>
+                    <th>Opis</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in expenses %}
+                <tr>
+                    <td>{{ expense['expense_date'] }}</td>
+                    <td>{{ expense['merchant'] }}</td>
+                    <td>{{ '%.2f'|format(expense['amount']) }} PLN</td>
+                    <td>{{ expense['category'] }}</td>
+                    <td>{{ expense['expense_type'] }}</td>
+                    <td>{{ expense['notes'] or '-' }}</td>
+                    <td>{{ expense['bank'] or '-' }}</td>
+                    <td>{{ expense['description'] or '-' }}</td>
+                    <td class="actions">
+                        <form method="post" action="{{ url_for('delete_expense', expense_id=expense['id']) }}" onsubmit="return confirm('Na pewno usunąć ten wpis?');">
+                            <button type="submit" class="button danger">Usuń</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="empty">Brak zapisanych wydatków. Dodaj pierwszy wpis powyżej.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
