@@ -1,8 +1,9 @@
+import csv
 import os
 import sqlite3
 from datetime import date, datetime
 from functools import wraps
-from io import BytesIO
+from io import BytesIO, StringIO
 from typing import Dict, List, Tuple
 
 from flask import (
@@ -18,8 +19,6 @@ from flask import (
     session,
     url_for,
 )
-from openpyxl import Workbook, load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
 from werkzeug.utils import secure_filename
 
 EXPENSE_TYPES: List[str] = ["Materialy", "Zaliczka", "Usluga", "Robocizna", "Inne"]
@@ -269,7 +268,7 @@ def create_app() -> Flask:
         ).fetchall()
         return rows, sort_column, normalized_direction
 
-    def parse_excel_date(value) -> str:
+    def parse_import_date(value) -> str:
         if value is None:
             raise ValueError("Brak daty")
         if isinstance(value, datetime):
@@ -620,27 +619,28 @@ def create_app() -> Flask:
     def export_expenses():
         db = get_db()
         expenses_rows, _, _ = fetch_expenses(db, "display_order", "asc")
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.title = "Wydatki"
-        headers = [
-            "Data",
-            "Odbiorca",
-            "Kwota",
-            "Etap",
-            "Typ wydatku",
-            "Notatki",
-            "Bank",
-            "Opis",
-            "Załącznik",
-        ]
-        sheet.append(headers)
+        output = StringIO()
+        writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(
+            [
+                "Data",
+                "Odbiorca",
+                "Kwota",
+                "Etap",
+                "Typ wydatku",
+                "Notatki",
+                "Bank",
+                "Opis",
+                "Załącznik",
+            ]
+        )
         for row in expenses_rows:
-            sheet.append(
+            amount_text = f"{float(row['amount']):.2f}".replace(".", ",")
+            writer.writerow(
                 [
                     row["expense_date"],
                     row["merchant"],
-                    float(row["amount"]),
+                    amount_text,
                     row["category"],
                     row["expense_type"],
                     row["notes"] or "",
@@ -650,15 +650,15 @@ def create_app() -> Flask:
                 ]
             )
 
-        stream = BytesIO()
-        workbook.save(stream)
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        stream = BytesIO(csv_bytes)
         stream.seek(0)
-        filename = "wydatki_budowa.xlsx"
+        filename = "wydatki_budowa.csv"
         return send_file(
             stream,
             as_attachment=True,
             download_name=filename,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mimetype="text/csv",
         )
 
     @app.post("/expenses/import")
@@ -667,22 +667,43 @@ def create_app() -> Flask:
     def import_expenses():
         uploaded = request.files.get("file")
         if uploaded is None or uploaded.filename == "":
-            flash("Wybierz plik w formacie XLSX.", "error")
+            flash("Wybierz plik w formacie CSV.", "error")
             return redirect(url_for("history"))
 
-        try:
-            workbook = load_workbook(uploaded, data_only=True)
-        except InvalidFileException:
-            flash("Nie udało się odczytać pliku. Upewnij się, że to plik .xlsx.", "error")
-            return redirect(url_for("history"))
-
-        sheet = workbook.active
-        rows = list(sheet.iter_rows(values_only=True))
-        if not rows:
+        raw_bytes = uploaded.read()
+        if not raw_bytes:
             flash("Plik jest pusty.", "error")
             return redirect(url_for("history"))
 
-        header = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
+        decoded_content = None
+        for encoding in ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2"):
+            try:
+                decoded_content = raw_bytes.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded_content is None:
+            flash("Nie udało się odczytać pliku CSV. Upewnij się, że używasz kodowania UTF-8.", "error")
+            return redirect(url_for("history"))
+
+        stream = StringIO(decoded_content)
+        sample = stream.read(2048)
+        stream.seek(0)
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=";,")
+            stream.seek(0)
+            reader = csv.DictReader(stream, dialect=dialect)
+        except csv.Error:
+            stream.seek(0)
+            reader = csv.DictReader(stream, delimiter=";")
+
+        if not reader.fieldnames:
+            flash("Nie znaleziono nagłówka w pliku CSV.", "error")
+            return redirect(url_for("history"))
+
+        normalized_headers = {
+            (name or "").strip().lower(): name for name in reader.fieldnames
+        }
         expected = {
             "data": "expense_date",
             "odbiorca": "merchant",
@@ -693,17 +714,13 @@ def create_app() -> Flask:
             "bank": "bank",
             "opis": "description",
         }
-        header_map = {}
+        header_map: Dict[str, str] = {}
         for label, field in expected.items():
-            try:
-                index = header.index(label)
-            except ValueError:
-                flash(
-                    "Brakuje kolumny '" + label + "' w nagłówku arkusza.",
-                    "error",
-                )
+            source = normalized_headers.get(label)
+            if source is None:
+                flash(f"Brakuje kolumny '{label}' w nagłówku pliku.", "error")
                 return redirect(url_for("history"))
-            header_map[field] = index
+            header_map[field] = source
 
         db = get_db()
         max_order_row = db.execute(
@@ -714,14 +731,17 @@ def create_app() -> Flask:
         inserted = 0
         skipped = 0
 
-        for data_row in rows[1:]:
-            if data_row is None:
+        for row in reader:
+            if row is None:
                 continue
-            values = {field: data_row[idx] if idx < len(data_row) else None for field, idx in header_map.items()}
-            if all(value in (None, "") for value in values.values()):
+            values = {
+                field: (row.get(source, "") if row.get(source) is not None else "")
+                for field, source in header_map.items()
+            }
+            if all((value or "").strip() == "" for value in values.values()):
                 continue
             try:
-                expense_date = parse_excel_date(values["expense_date"])
+                expense_date = parse_import_date(values["expense_date"])
                 merchant = (values["merchant"] or "").strip()
                 expense_type_raw = (values["expense_type"] or "").strip()
                 category_raw = (values["category"] or "").strip()
@@ -779,7 +799,7 @@ def create_app() -> Flask:
                 "success" if skipped == 0 else "info",
             )
         else:
-            flash("Nie udało się zaimportować żadnych danych z pliku.", "error")
+            flash("Nie udało się zaimportować żadnych danych z pliku CSV.", "error")
         return redirect(url_for("history"))
 
     @app.route("/users")

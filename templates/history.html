@@ -9,11 +9,11 @@
         </div>
         <div class="actions">
             <a href="{{ url_for('export_expenses') }}" class="button primary" download>
-                Eksport do Excel
+                Eksport do CSV
             </a>
             {% if permissions.get('can_add') %}
             <button type="button" class="button outline" data-open-import>
-                Import z Excel
+                Import z CSV
             </button>
             {% endif %}
         </div>
@@ -156,7 +156,7 @@
 {% if permissions.get('can_add') %}
 <dialog id="import-dialog" class="modal">
     <form method="post" action="{{ url_for('import_expenses') }}" enctype="multipart/form-data" class="form-grid single">
-        <h3>Import z pliku Excel</h3>
+        <h3>Import z pliku CSV</h3>
         <p class="muted">
             Aby przygotować plik w Excelu:
         </p>
@@ -164,11 +164,11 @@
             <li>Otwórz swój arkusz z wydatkami w programie Excel.</li>
             <li>Ustaw w pierwszym wierszu nagłówki w kolejności: Data, Odbiorca, Kwota, Etap, Typ wydatku, Notatki, Bank, Opis.</li>
             <li>Upewnij się, że kolumna „Kwota” zawiera wartości liczbowe, a kolumna „Etap” jedną z opcji ETAP 0–ETAP 5.</li>
-            <li>Wybierz <strong>Plik &gt; Zapisz jako</strong> i zapisz plik w formacie <strong>Skoroszyt programu Excel (*.xlsx)</strong>.</li>
-            <li>Załaduj zapisany plik poniżej i kliknij „Importuj”.</li>
+            <li>Wybierz <strong>Plik &gt; Zapisz jako</strong> i ustaw format <strong>CSV UTF-8 (rozdzielany przecinkami)</strong> lub <strong>CSV (rozdzielany średnikami)</strong>.</li>
+            <li>Zapisz plik, zamknij go w Excelu i wgraj poniżej, a następnie kliknij „Importuj”.</li>
         </ol>
-        <label for="import-file" class="full-width">Plik Excel (.xlsx)</label>
-        <input type="file" id="import-file" name="file" accept=".xlsx" required class="full-width">
+        <label for="import-file" class="full-width">Plik CSV (.csv)</label>
+        <input type="file" id="import-file" name="file" accept=".csv" required class="full-width">
         <div class="form-actions">
             <button type="submit" class="button primary">Importuj</button>
             <button type="button" class="button" id="cancel-import">Anuluj</button>
