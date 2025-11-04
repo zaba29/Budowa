@@ -383,11 +383,15 @@ def create_app() -> Flask:
         bank = request.form.get("bank", "").strip()
         description = request.form.get("description", "").strip()
         expense_type = request.form.get("expense_type", "").strip()
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
         try:
             amount = parse_amount(amount_raw)
         except ValueError as exc:
-            flash(str(exc), "error")
+            message = str(exc)
+            flash(message, "error")
+            if is_ajax:
+                return jsonify({"error": message}), 400
             return redirect(url_for("history"))
 
         if (
@@ -398,7 +402,10 @@ def create_app() -> Flask:
             or expense_type not in EXPENSE_TYPES
             or category not in CATEGORIES
         ):
-            flash("Proszę uzupełnić wymagane pola poprawnymi wartościami.", "error")
+            message = "Proszę uzupełnić wymagane pola poprawnymi wartościami."
+            flash(message, "error")
+            if is_ajax:
+                return jsonify({"error": message}), 400
             return redirect(url_for("history"))
 
         db = get_db()
@@ -428,7 +435,10 @@ def create_app() -> Flask:
             ),
         )
         db.commit()
-        flash("Wydatek został zaktualizowany.", "success")
+        success_message = "Wydatek został zaktualizowany."
+        flash(success_message, "success")
+        if is_ajax:
+            return jsonify({"redirect": url_for("history")})
         return redirect(url_for("history"))
 
     @app.post("/expenses/<int:expense_id>/delete")

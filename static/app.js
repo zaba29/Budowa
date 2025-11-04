@@ -7,6 +7,68 @@ function setupEditDialog() {
     const form = document.getElementById('edit-expense-form');
     const cancelButton = document.getElementById('cancel-edit');
 
+    if (form) {
+        form.addEventListener('submit', (event) => {
+            if (!form.action) {
+                return;
+            }
+            event.preventDefault();
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton ? submitButton.textContent : '';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Zapisywanie...';
+            }
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+                .then((response) =>
+                    response
+                        .json()
+                        .catch(() => ({}))
+                        .then((data) => ({ response, data })),
+                )
+                .then(({ response, data }) => {
+                    if (!response.ok) {
+                        throw new Error(
+                            (data && data.error) || 'Nie udało się zapisać zmian. Spróbuj ponownie.',
+                        );
+                    }
+
+                    dialog.close();
+
+                    if (data && data.redirect) {
+                        window.location.href = data.redirect;
+                        return;
+                    }
+
+                    if (response.redirected && response.url) {
+                        window.location.href = response.url;
+                        return;
+                    }
+
+                    window.location.reload();
+                })
+                .catch((error) => {
+                    alert(error.message || 'Nie udało się zapisać zmian. Spróbuj ponownie.');
+                })
+                .finally(() => {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.textContent = originalText;
+                    }
+                });
+        });
+    }
+
     document.querySelectorAll('[data-action="edit"]').forEach((button) => {
         button.addEventListener('click', () => {
             const row = button.closest('tr');
