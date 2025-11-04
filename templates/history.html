@@ -53,12 +53,13 @@
                     <th>Notatki</th>
                     <th>Bank</th>
                     <th>Opis</th>
+                    <th>Załącznik</th>
                     <th>Akcje</th>
                 </tr>
             </thead>
             <tbody>
                 {% for expense in expenses %}
-                <tr class="draggable-row" data-expense-id="{{ expense.id }}" data-expense='{{ expense|tojson }}' data-update-url="{{ url_for('update_expense', expense_id=expense.id) }}'>
+                <tr class="draggable-row" data-expense-id="{{ expense.id }}" data-expense='{{ expense|tojson }}' data-update-url="{{ url_for('update_expense', expense_id=expense.id) }}" data-has-attachment="{{ 'true' if expense.has_attachment else 'false' }}" data-attachment-name="{{ (expense.attachment_filename or '')|e }}" data-attachment-url="{{ expense.attachment_url|e }}">
                     <td class="drag-cell">{% if permissions.get('can_edit') %}<span class="drag-handle" title="Złap i przeciągnij">⋮⋮</span>{% endif %}</td>
                     <td>{{ expense.expense_date }}</td>
                     <td>{{ expense.merchant }}</td>
@@ -68,6 +69,13 @@
                     <td>{{ expense.notes or '-' }}</td>
                     <td>{{ expense.bank or '-' }}</td>
                     <td>{{ expense.description or '-' }}</td>
+                    <td>
+                        {% if expense.attachment_filename %}
+                        <a href="{{ url_for('download_attachment', expense_id=expense.id) }}" class="badge badge-attachment" target="_blank" rel="noopener">Zdjęcie dostępne</a>
+                        {% else %}
+                        <span class="muted">Brak</span>
+                        {% endif %}
+                    </td>
                     <td class="actions">
                         {% if permissions.get('can_edit') %}
                         <button type="button" class="button" data-action="edit">Edytuj</button>
@@ -81,7 +89,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="10" class="empty">Brak zapisanych wydatków. Dodaj pierwszy wpis w panelu głównym.</td>
+                    <td colspan="11" class="empty">Brak zapisanych wydatków. Dodaj pierwszy wpis w panelu głównym.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -90,9 +98,8 @@
 </section>
 
 <dialog id="edit-dialog" class="modal">
-    <form method="post" id="edit-expense-form" class="form-grid">
+    <form method="post" id="edit-expense-form" class="form-grid" enctype="multipart/form-data">
         <h3>Edytuj wydatek</h3>
-        <input type="hidden" name="_method" value="update">
         <label for="edit_expense_date">Data</label>
         <input type="date" id="edit_expense_date" name="expense_date" required>
 
@@ -124,6 +131,20 @@
 
         <label for="edit_description">Opis</label>
         <textarea id="edit_description" name="description" rows="2"></textarea>
+
+        <div id="current-attachment" class="attachment-status hidden">
+            <p class="muted">Aktualny załącznik: <strong id="current-attachment-name"></strong></p>
+            <a id="current-attachment-link" class="button outline" target="_blank" rel="noopener">Pobierz plik</a>
+        </div>
+
+        <label for="edit_attachment">Nowy załącznik (opcjonalnie)</label>
+        <input type="file" id="edit_attachment" name="attachment" accept=".pdf,image/*">
+
+        <label class="checkbox">
+            <input type="checkbox" id="edit_remove_attachment" name="remove_attachment">
+            Usuń dołączony plik
+        </label>
+        <p class="form-note">Obsługiwane formaty: PDF, JPG, PNG, WEBP, HEIC (do 10&nbsp;MB).</p>
 
         <div class="form-actions">
             <button type="submit" class="button primary">Zapisz</button>

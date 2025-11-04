@@ -6,6 +6,11 @@ function setupEditDialog() {
 
     const form = document.getElementById('edit-expense-form');
     const cancelButton = document.getElementById('cancel-edit');
+    const currentAttachment = document.getElementById('current-attachment');
+    const currentAttachmentName = document.getElementById('current-attachment-name');
+    const currentAttachmentLink = document.getElementById('current-attachment-link');
+    const removeAttachment = document.getElementById('edit_remove_attachment');
+    const attachmentInput = document.getElementById('edit_attachment');
 
     if (form) {
         form.addEventListener('submit', (event) => {
@@ -29,6 +34,7 @@ function setupEditDialog() {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                 },
+                credentials: 'same-origin',
             })
                 .then((response) =>
                     response
@@ -85,6 +91,38 @@ function setupEditDialog() {
             form.querySelector('#edit_notes').value = payload.notes || '';
             form.querySelector('#edit_bank').value = payload.bank || '';
             form.querySelector('#edit_description').value = payload.description || '';
+            if (attachmentInput) {
+                attachmentInput.value = '';
+            }
+
+            const hasAttachment = row.dataset.hasAttachment === 'true';
+            const attachmentName = row.dataset.attachmentName || '';
+            const attachmentUrl = row.dataset.attachmentUrl || '';
+
+            if (currentAttachment) {
+                if (hasAttachment) {
+                    currentAttachment.classList.remove('hidden');
+                    if (currentAttachmentName) {
+                        currentAttachmentName.textContent = attachmentName || 'Załącznik';
+                    }
+                    if (currentAttachmentLink) {
+                        currentAttachmentLink.href = attachmentUrl || '#';
+                        currentAttachmentLink.classList.remove('hidden');
+                    }
+                } else {
+                    currentAttachment.classList.add('hidden');
+                    if (currentAttachmentLink) {
+                        currentAttachmentLink.href = '#';
+                        currentAttachmentLink.classList.add('hidden');
+                    }
+                }
+            }
+
+            if (removeAttachment) {
+                removeAttachment.checked = false;
+                removeAttachment.disabled = !hasAttachment;
+            }
+
             dialog.showModal();
         });
     });
@@ -92,6 +130,22 @@ function setupEditDialog() {
     if (cancelButton) {
         cancelButton.addEventListener('click', () => {
             dialog.close();
+        });
+    }
+
+    if (attachmentInput) {
+        attachmentInput.addEventListener('change', () => {
+            if (attachmentInput.files.length > 0 && removeAttachment) {
+                removeAttachment.checked = false;
+            }
+        });
+    }
+
+    if (removeAttachment) {
+        removeAttachment.addEventListener('change', () => {
+            if (removeAttachment.checked && attachmentInput) {
+                attachmentInput.value = '';
+            }
         });
     }
 }

@@ -10,7 +10,7 @@
             </div>
         </div>
         {% if permissions.get('can_add') %}
-        <form method="post" action="{{ url_for('add_expense') }}" class="form-grid">
+        <form method="post" action="{{ url_for('add_expense') }}" class="form-grid" enctype="multipart/form-data">
             <label for="expense_date">Data</label>
             <input type="date" id="expense_date" name="expense_date" required>
 
@@ -44,6 +44,10 @@
 
             <label for="description">Opis szczegółowy</label>
             <textarea id="description" name="description" rows="2" placeholder="szczegóły wydatku"></textarea>
+
+            <label for="attachment">Paragon / faktura (opcjonalnie)</label>
+            <input type="file" id="attachment" name="attachment" accept=".pdf,image/*">
+            <p class="form-note">Obsługiwane formaty: PDF, JPG, PNG, WEBP, HEIC (do 10&nbsp;MB).</p>
 
             <button type="submit" class="button primary full-width">Zapisz</button>
         </form>

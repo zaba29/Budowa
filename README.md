@@ -47,9 +47,10 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
 
 - Panel główny z formularzem dodawania wydatków, podsumowaniem według etapów (ETAP 0–ETAP 5) i typów (Materiały, Zaliczka, Usługa, Robocizna, Inne).
 - Osobna zakładka **Historia wydatków** z możliwością sortowania, edycji, przeciągania pozycji, importu z Excela i eksportu do Excela.
+- Do każdego wydatku możesz dołączyć paragon lub fakturę (PDF, zdjęcie). Informacja „Zdjęcie dostępne” pojawia się w historii i pozwala pobrać plik jednym kliknięciem.
 - Import wymaga pliku `.xlsx` z nagłówkami w pierwszym wierszu: `Data`, `Odbiorca`, `Kwota`, `Etap`, `Typ wydatku`, `Notatki`, `Bank`, `Opis`.
 - Eksport jednym kliknięciem zapisuje wszystkie wydatki w pliku `wydatki_budowa.xlsx` gotowym do otwarcia w Excelu.
-- Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz strona raportów z wykresami (Chart.js).
+- Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz odświeżona strona raportów z animowanymi wykresami (Chart.js).
 
 ## Instrukcja krok po kroku dla macOS (dla początkujących)
 

@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date, datetime
 from functools import wraps
 from io import BytesIO
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from flask import (
     Flask,
@@ -20,10 +20,21 @@ from flask import (
 )
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from werkzeug.utils import secure_filename
 
 EXPENSE_TYPES: List[str] = ["Materialy", "Zaliczka", "Usluga", "Robocizna", "Inne"]
 CATEGORIES: List[str] = [f"ETAP {i}" for i in range(6)]
 ROLE_LABELS: Dict[str, str] = {"admin": "Admin", "user": "Użytkownik", "guest": "Gość"}
+ALLOWED_ATTACHMENT_EXTENSIONS: Tuple[str, ...] = (
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".heic",
+    ".heif",
+    ".webp",
+)
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 def create_app() -> Flask:
@@ -33,6 +44,7 @@ def create_app() -> Flask:
         DATABASE=os.path.join(app.root_path, "expenses.db"),
         USERNAME=os.environ.get("APP_USERNAME", "lukasz"),
         PASSWORD=os.environ.get("APP_PASSWORD", "lukasz29"),
+        MAX_ATTACHMENT_SIZE=int(os.environ.get("MAX_ATTACHMENT_SIZE", MAX_ATTACHMENT_SIZE)),
     )
 
     os.makedirs(app.root_path, exist_ok=True)
@@ -74,6 +86,13 @@ def create_app() -> Flask:
                 "ALTER TABLE expenses ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0"
             )
             db.execute("UPDATE expenses SET display_order = id WHERE display_order = 0")
+
+        if "attachment_filename" not in expense_columns:
+            db.execute("ALTER TABLE expenses ADD COLUMN attachment_filename TEXT")
+        if "attachment_mimetype" not in expense_columns:
+            db.execute("ALTER TABLE expenses ADD COLUMN attachment_mimetype TEXT")
+        if "attachment_data" not in expense_columns:
+            db.execute("ALTER TABLE expenses ADD COLUMN attachment_data BLOB")
 
         db.execute(
             """
@@ -180,6 +199,30 @@ def create_app() -> Flask:
             raise ValueError(
                 "Nieprawidłowa kwota. Użyj cyfr oraz kropki lub przecinka."
             ) from exc
+
+    def prepare_attachment(file_storage) -> Tuple[str, str, bytes] | None:
+        if not file_storage or not file_storage.filename:
+            return None
+
+        filename = secure_filename(file_storage.filename)
+        if not filename:
+            raise ValueError("Niepoprawna nazwa pliku. Spróbuj ponownie.")
+
+        extension = os.path.splitext(filename)[1].lower()
+        if extension not in ALLOWED_ATTACHMENT_EXTENSIONS:
+            allowed = ", ".join(ext.lstrip(".") for ext in ALLOWED_ATTACHMENT_EXTENSIONS)
+            raise ValueError(f"Nieobsługiwany format pliku. Dozwolone rozszerzenia: {allowed}.")
+
+        file_storage.stream.seek(0)
+        data = file_storage.read()
+        max_size = app.config.get("MAX_ATTACHMENT_SIZE", MAX_ATTACHMENT_SIZE)
+        if len(data) > max_size:
+            raise ValueError(
+                "Załącznik jest zbyt duży. Maksymalny rozmiar pliku to 10 MB."
+            )
+
+        mimetype = file_storage.mimetype or "application/octet-stream"
+        return filename, mimetype, data
 
     def fetch_category_totals(db: sqlite3.Connection) -> Dict[str, float]:
         results = db.execute(
@@ -304,7 +347,18 @@ def create_app() -> Flask:
         expenses_rows, _, normalized_direction = fetch_expenses(
             db, requested_sort, direction
         )
-        expenses = [dict(row) for row in expenses_rows]
+        expenses: List[Dict[str, object]] = []
+        for row in expenses_rows:
+            expense = dict(row)
+            has_attachment = bool(expense.get("attachment_data"))
+            expense["has_attachment"] = has_attachment
+            expense["attachment_url"] = (
+                url_for("download_attachment", expense_id=expense["id"])
+                if has_attachment
+                else ""
+            )
+            expense.pop("attachment_data", None)
+            expenses.append(expense)
         return render_template(
             "history.html",
             expenses=expenses,
@@ -324,12 +378,24 @@ def create_app() -> Flask:
         bank = request.form.get("bank", "").strip()
         description = request.form.get("description", "").strip()
         expense_type = request.form.get("expense_type", "").strip()
+        attachment_file = request.files.get("attachment")
 
         try:
             amount = parse_amount(amount_raw)
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("index"))
+
+        try:
+            attachment_payload = prepare_attachment(attachment_file)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
+        attachment_filename = attachment_mimetype = None
+        attachment_data = None
+        if attachment_payload:
+            attachment_filename, attachment_mimetype, attachment_data = attachment_payload
 
         if (
             not expense_date
@@ -352,8 +418,8 @@ def create_app() -> Flask:
             """
             INSERT INTO expenses (
                 expense_date, merchant, amount, category, notes, bank, description,
-                expense_type, display_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                expense_type, display_order, attachment_filename, attachment_mimetype, attachment_data
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 expense_date,
@@ -365,6 +431,9 @@ def create_app() -> Flask:
                 description,
                 expense_type,
                 next_order,
+                attachment_filename,
+                attachment_mimetype,
+                attachment_data,
             ),
         )
         db.commit()
@@ -384,6 +453,8 @@ def create_app() -> Flask:
         description = request.form.get("description", "").strip()
         expense_type = request.form.get("expense_type", "").strip()
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        remove_attachment = request.form.get("remove_attachment") in {"on", "1", "true"}
+        attachment_file = request.files.get("attachment")
 
         try:
             amount = parse_amount(amount_raw)
@@ -409,6 +480,44 @@ def create_app() -> Flask:
             return redirect(url_for("history"))
 
         db = get_db()
+        existing = db.execute(
+            "SELECT attachment_filename, attachment_mimetype, attachment_data FROM expenses WHERE id = ?",
+            (expense_id,),
+        ).fetchone()
+        if existing is None:
+            message = "Nie znaleziono wpisu do edycji."
+            if is_ajax:
+                return jsonify({"error": message}), 404
+            flash(message, "error")
+            return redirect(url_for("history"))
+
+        current_attachment = {
+            "filename": existing["attachment_filename"],
+            "mimetype": existing["attachment_mimetype"],
+            "data": existing["attachment_data"],
+        }
+
+        try:
+            attachment_payload = prepare_attachment(attachment_file)
+        except ValueError as exc:
+            message = str(exc)
+            if is_ajax:
+                return jsonify({"error": message}), 400
+            flash(message, "error")
+            return redirect(url_for("history"))
+
+        if attachment_payload:
+            attachment_filename, attachment_mimetype, attachment_data = attachment_payload
+        else:
+            attachment_filename = current_attachment["filename"]
+            attachment_mimetype = current_attachment["mimetype"]
+            attachment_data = current_attachment["data"]
+
+        if remove_attachment:
+            attachment_filename = None
+            attachment_mimetype = None
+            attachment_data = None
+
         db.execute(
             """
             UPDATE expenses
@@ -419,7 +528,10 @@ def create_app() -> Flask:
                    notes = ?,
                    bank = ?,
                    description = ?,
-                   expense_type = ?
+                   expense_type = ?,
+                   attachment_filename = ?,
+                   attachment_mimetype = ?,
+                   attachment_data = ?
              WHERE id = ?
             """,
             (
@@ -431,6 +543,9 @@ def create_app() -> Flask:
                 bank,
                 description,
                 expense_type,
+                attachment_filename,
+                attachment_mimetype,
+                attachment_data,
                 expense_id,
             ),
         )
@@ -472,6 +587,34 @@ def create_app() -> Flask:
         db.commit()
         return ("", 204)
 
+    @app.get("/expenses/<int:expense_id>/attachment")
+    @login_required
+    def download_attachment(expense_id: int):
+        db = get_db()
+        row = db.execute(
+            """
+            SELECT attachment_filename, attachment_mimetype, attachment_data
+              FROM expenses
+             WHERE id = ?
+            """,
+            (expense_id,),
+        ).fetchone()
+
+        if row is None or row["attachment_data"] is None:
+            flash("Brak załącznika do pobrania.", "error")
+            return redirect(url_for("history"))
+
+        stream = BytesIO(row["attachment_data"])
+        stream.seek(0)
+        filename = row["attachment_filename"] or f"zalacznik_{expense_id}"
+        mimetype = row["attachment_mimetype"] or "application/octet-stream"
+        return send_file(
+            stream,
+            download_name=filename,
+            mimetype=mimetype,
+            as_attachment=True,
+        )
+
     @app.get("/expenses/export")
     @login_required
     def export_expenses():
@@ -489,6 +632,7 @@ def create_app() -> Flask:
             "Notatki",
             "Bank",
             "Opis",
+            "Załącznik",
         ]
         sheet.append(headers)
         for row in expenses_rows:
@@ -502,6 +646,7 @@ def create_app() -> Flask:
                     row["notes"] or "",
                     row["bank"] or "",
                     row["description"] or "",
+                    "TAK" if row["attachment_filename"] else "",
                 ]
             )
 
@@ -605,8 +750,8 @@ def create_app() -> Flask:
                     """
                     INSERT INTO expenses (
                         expense_date, merchant, amount, category, notes, bank, description,
-                        expense_type, display_order
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        expense_type, display_order, attachment_filename, attachment_mimetype, attachment_data
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         expense_date,
@@ -618,6 +763,9 @@ def create_app() -> Flask:
                         description,
                         expense_type,
                         current_max,
+                        None,
+                        None,
+                        None,
                     ),
                 )
                 inserted += 1
@@ -771,6 +919,18 @@ def create_app() -> Flask:
         month_labels = [row["month"] for row in monthly_totals]
         month_values = [round(row["total"], 2) for row in monthly_totals]
 
+        total_spent = round(sum(stage_values), 2)
+        stage_pairs = list(zip(stage_labels, stage_values))
+        type_pairs = list(zip(type_labels, type_values))
+
+        top_stage_label, top_stage_value = ("-", 0.0)
+        if stage_pairs:
+            top_stage_label, top_stage_value = max(stage_pairs, key=lambda item: item[1])
+
+        top_type_label, top_type_value = ("-", 0.0)
+        if type_pairs:
+            top_type_label, top_type_value = max(type_pairs, key=lambda item: item[1])
+
         return render_template(
             "reports.html",
             stage_labels=stage_labels,
@@ -779,6 +939,11 @@ def create_app() -> Flask:
             type_values=type_values,
             month_labels=month_labels,
             month_values=month_values,
+            total_spent=total_spent,
+            top_stage_label=top_stage_label,
+            top_stage_value=round(top_stage_value, 2),
+            top_type_label=top_type_label,
+            top_type_value=round(top_type_value, 2),
         )
 
     return app

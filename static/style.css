@@ -89,6 +89,110 @@ main {
     gap: 2rem;
 }
 
+.reports-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.reports-hero::after {
+    content: "";
+    position: absolute;
+    inset: -40% -20% auto;
+    height: 240px;
+    background: radial-gradient(circle at top, rgba(59, 130, 246, 0.45), transparent 65%);
+    filter: blur(40px);
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.reports-hero__text {
+    position: relative;
+    z-index: 1;
+}
+
+.reports-hero__text h2 {
+    margin-top: 0;
+    font-size: 2rem;
+}
+
+.reports-hero__stats {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    background: rgba(15, 23, 42, 0.55);
+    border-radius: 18px;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    transition: transform 0.25s ease, border 0.25s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(56, 189, 248, 0.55);
+}
+
+.stat-card.primary {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.65), rgba(59, 130, 246, 0.45));
+    border-color: rgba(56, 189, 248, 0.65);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.reports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
+}
+
+.chart-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -30% -30% auto;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle at center, rgba(148, 163, 184, 0.18), transparent 70%);
+    filter: blur(30px);
+    pointer-events: none;
+}
+
+.chart-card.wide {
+    grid-column: span 2;
+}
+
+.chart-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+}
+
 .card {
     background: rgba(15, 23, 42, 0.55);
     border-radius: 24px;
@@ -196,6 +300,75 @@ main {
 
 .form-grid .full-width {
     grid-column: span 2;
+}
+
+.form-grid input[type="file"] {
+    padding: 0.35rem 0.75rem;
+    background: rgba(15, 23, 42, 0.3);
+    border-style: dashed;
+}
+
+.form-note {
+    grid-column: span 2;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: -0.2rem 0 0.8rem;
+}
+
+.checkbox {
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+}
+
+.checkbox input[type="checkbox"] {
+    width: auto;
+    height: 1.1rem;
+}
+
+.attachment-status {
+    grid-column: span 2;
+    padding: 0.75rem 1rem;
+    border-radius: 14px;
+    background: rgba(14, 165, 233, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.attachment-status .button {
+    align-self: flex-start;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+}
+
+.badge-attachment {
+    background: rgba(56, 189, 248, 0.22);
+    color: var(--text);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.badge-attachment:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
 }
 
 .form-grid.single .full-width {
@@ -535,7 +708,7 @@ main {
     margin: 0;
 }
 
-.badge {
+.user-card .badge {
     background: var(--primary);
     color: white;
     padding: 0.25rem 0.75rem;
@@ -574,6 +747,14 @@ main {
         grid-template-columns: 1fr;
     }
 
+    .reports-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-card.wide {
+        grid-column: span 1;
+    }
+
     .top-bar {
         flex-wrap: wrap;
         gap: 1rem;
@@ -591,6 +772,10 @@ main {
     }
 
     .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .reports-hero__stats {
         grid-template-columns: 1fr;
     }
 

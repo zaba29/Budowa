@@ -1,17 +1,49 @@
 {% extends 'base.html' %}
 {% block title %}Raporty wydatków{% endblock %}
 {% block content %}
-<section class="card">
-    <h2>Wydatki według etapów</h2>
-    <canvas id="stageChart" width="400" height="200"></canvas>
+<section class="reports-hero card glass">
+    <div class="reports-hero__text">
+        <h2>Raport wydatków</h2>
+        <p class="muted">Interaktywne wykresy pomagają szybko ocenić, które etapy i typy kosztują najwięcej oraz jak zmieniają się wydatki w czasie.</p>
+    </div>
+    <div class="reports-hero__stats">
+        <div class="stat-card primary">
+            <span class="stat-label">Łączne wydatki</span>
+            <span class="stat-value">{{ '%.2f'|format(total_spent) }} PLN</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Najdroższy etap</span>
+            <span class="stat-value">{{ top_stage_label }} · {{ '%.2f'|format(top_stage_value) }} PLN</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Dominujący typ</span>
+            <span class="stat-value">{{ top_type_label }} · {{ '%.2f'|format(top_type_value) }} PLN</span>
+        </div>
+    </div>
 </section>
-<section class="card">
-    <h2>Typy wydatków</h2>
-    <canvas id="typeChart" width="400" height="200"></canvas>
-</section>
-<section class="card">
-    <h2>Wydatki miesięczne</h2>
-    <canvas id="timelineChart" width="400" height="200"></canvas>
+
+<section class="reports-grid">
+    <div class="chart-card card glass">
+        <div class="chart-header">
+            <h3>Wydatki według etapów</h3>
+            <p class="muted">Porównanie kosztów między etapami budowy.</p>
+        </div>
+        <canvas id="stageChart" height="220"></canvas>
+    </div>
+    <div class="chart-card card glass">
+        <div class="chart-header">
+            <h3>Typy wydatków</h3>
+            <p class="muted">Które kategorie pochłaniają największy budżet.</p>
+        </div>
+        <canvas id="typeChart" height="220"></canvas>
+    </div>
+    <div class="chart-card card glass wide">
+        <div class="chart-header">
+            <h3>Wydatki miesięczne</h3>
+            <p class="muted">Dynamika wydatków w kolejnych miesiącach.</p>
+        </div>
+        <canvas id="timelineChart" height="260"></canvas>
+    </div>
 </section>
 {% endblock %}
 {% block scripts %}
@@ -25,6 +57,12 @@ const monthLabels = {{ month_labels|tojson }};
 const monthValues = {{ month_values|tojson }};
 
 const palette = ['#38bdf8', '#0ea5e9', '#22d3ee', '#a855f7', '#f97316', '#facc15'];
+Chart.defaults.color = '#cbd5f5';
+Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
+const commonAnimation = {
+    duration: 900,
+    easing: 'easeOutQuart',
+};
 
 const stageCtx = document.getElementById('stageChart');
 if (stageCtx) {
@@ -39,6 +77,7 @@ if (stageCtx) {
             }],
         },
         options: {
+            animation: commonAnimation,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -70,6 +109,9 @@ if (typeCtx) {
                 backgroundColor: palette,
             }],
         },
+        options: {
+            animation: commonAnimation,
+        },
     });
 }
 
@@ -89,6 +131,7 @@ if (timelineCtx) {
             }],
         },
         options: {
+            animation: commonAnimation,
             scales: {
                 y: {
                     beginAtZero: true,
