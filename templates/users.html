@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Panel użytkowników{% endblock %}
+{% block content %}
+<section class="card">
+    <h2>Dodaj użytkownika</h2>
+    <form method="post" action="{{ url_for('add_user') }}" class="form-grid user-form">
+        <label for="username">Nazwa użytkownika</label>
+        <input id="username" name="username" required>
+
+        <label for="password">Hasło</label>
+        <input id="password" name="password" required>
+
+        <label for="role">Rola</label>
+        <select id="role" name="role">
+            {% for value, label in role_labels.items() %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="permissions-group">
+            <span>Uprawnienia</span>
+            <label><input type="checkbox" name="can_add" checked> Dodawanie wydatków</label>
+            <label><input type="checkbox" name="can_edit" checked> Edycja wydatków</label>
+            <label><input type="checkbox" name="can_delete" checked> Usuwanie wydatków</label>
+            <label><input type="checkbox" name="can_view_reports" checked> Dostęp do raportów</label>
+            <p class="muted">Administrator otrzymuje wszystkie uprawnienia niezależnie od zaznaczeń.</p>
+        </div>
+
+        <button type="submit" class="button primary">Dodaj użytkownika</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Zarządzaj użytkownikami</h2>
+    <div class="user-list">
+        {% for user in users %}
+        <article class="user-card">
+            <header>
+                <h3>{{ user.username }}</h3>
+                <span class="badge">{{ role_labels[user.role] }}</span>
+            </header>
+            <form method="post" action="{{ url_for('update_user', user_id=user.id) }}" class="user-card-form">
+                <label>Hasło
+                    <input type="text" name="password" value="{{ user.password }}">
+                </label>
+                <label>Rola
+                    <select name="role">
+                        {% for value, label in role_labels.items() %}
+                        <option value="{{ value }}" {% if user.role == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="permissions-group compact">
+                    <span>Uprawnienia</span>
+                    <label><input type="checkbox" name="can_add" {% if user.can_add %}checked{% endif %}> Dodawanie</label>
+                    <label><input type="checkbox" name="can_edit" {% if user.can_edit %}checked{% endif %}> Edycja</label>
+                    <label><input type="checkbox" name="can_delete" {% if user.can_delete %}checked{% endif %}> Usuwanie</label>
+                    <label><input type="checkbox" name="can_view_reports" {% if user.can_view_reports %}checked{% endif %}> Raporty</label>
+                </div>
+                <div class="dialog-actions">
+                    <button type="submit" class="button primary">Zapisz</button>
+                </div>
+            </form>
+            <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" onsubmit="return confirm('Czy na pewno usunąć tego użytkownika?');">
+                <button type="submit" class="button danger full-width">Usuń użytkownika</button>
+            </form>
+        </article>
+        {% else %}
+        <p class="muted">Brak innych użytkowników.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

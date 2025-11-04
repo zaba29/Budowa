@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Raporty wydatków{% endblock %}
+{% block content %}
+<section class="card">
+    <h2>Wydatki według etapów</h2>
+    <canvas id="stageChart" width="400" height="200"></canvas>
+</section>
+<section class="card">
+    <h2>Typy wydatków</h2>
+    <canvas id="typeChart" width="400" height="200"></canvas>
+</section>
+<section class="card">
+    <h2>Wydatki miesięczne</h2>
+    <canvas id="timelineChart" width="400" height="200"></canvas>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-TdaIr05oig3NbS5FHYE97mOgNstsg12uVeOzY9iSdbBw2ALVfTpNjpMRylI3iAFQ" crossorigin="anonymous"></script>
+<script>
+const stageLabels = {{ stage_labels|tojson }};
+const stageValues = {{ stage_values|tojson }};
+const typeLabels = {{ type_labels|tojson }};
+const typeValues = {{ type_values|tojson }};
+const monthLabels = {{ month_labels|tojson }};
+const monthValues = {{ month_values|tojson }};
+
+const palette = ['#1f6feb', '#0ea5e9', '#10b981', '#f97316', '#ef4444', '#6366f1'];
+
+const stageCtx = document.getElementById('stageChart');
+if (stageCtx) {
+    new Chart(stageCtx, {
+        type: 'bar',
+        data: {
+            labels: stageLabels,
+            datasets: [{
+                label: 'Suma wydatków (PLN)',
+                data: stageValues,
+                backgroundColor: palette,
+            }],
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                },
+            },
+        },
+    });
+}
+
+const typeCtx = document.getElementById('typeChart');
+if (typeCtx) {
+    new Chart(typeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: typeLabels,
+            datasets: [{
+                data: typeValues,
+                backgroundColor: palette,
+            }],
+        },
+    });
+}
+
+const timelineCtx = document.getElementById('timelineChart');
+if (timelineCtx) {
+    new Chart(timelineCtx, {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Suma wydatków (PLN)',
+                data: monthValues,
+                borderColor: '#1f6feb',
+                backgroundColor: 'rgba(31, 111, 235, 0.15)',
+                tension: 0.3,
+                fill: true,
+            }],
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                },
+            },
+        },
+    });
+}
+</script>
+{% endblock %}

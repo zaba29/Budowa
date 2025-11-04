@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Budowa - wydatki{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
     <header class="top-bar">
-        <h1>Budżet budowy</h1>
-        {% if session.get('logged_in') %}
-        <nav>
-            <a class="button" href="{{ url_for('logout') }}">Wyloguj</a>
+        <div class="brand">
+            <h1>Budżet budowy</h1>
+        </div>
+        {% if current_user %}
+        <nav class="main-nav">
+            <a href="{{ url_for('index') }}" class="nav-link">Wydatki</a>
+            {% if permissions.get('can_view_reports') %}
+            <a href="{{ url_for('reports') }}" class="nav-link">Raporty</a>
+            {% endif %}
+            {% if current_user['role'] == 'admin' %}
+            <a href="{{ url_for('manage_users') }}" class="nav-link">Użytkownicy</a>
+            {% endif %}
         </nav>
+        <div class="user-info">
+            <span class="user-name">{{ current_user['username'] }} ({{ role_labels[current_user['role']] }})</span>
+            <a class="button" href="{{ url_for('logout') }}">Wyloguj</a>
+        </div>
         {% endif %}
     </header>
     <main>
@@ -27,5 +40,6 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
