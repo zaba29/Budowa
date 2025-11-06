@@ -46,13 +46,13 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
 ## Funkcje aplikacji
 
 - Panel główny z formularzem dodawania wydatków, podsumowaniem według etapów (ETAP 0–ETAP 5) i typów (Materiały, Zaliczka, Usługa, Robocizna, Inne).
-- Osobna zakładka **Historia wydatków** z możliwością sortowania, edycji, przeciągania pozycji, importu z pliku CSV i eksportu do CSV.
+- Osobna zakładka **Historia wydatków** z możliwością sortowania, edycji, przeciągania pozycji, importu z pliku CSV lub poprzez kopiuj-wklej oraz eksportu do CSV.
 - Do każdego wydatku możesz dołączyć paragon lub fakturę (PDF, zdjęcie). Informacja „Zdjęcie dostępne” pojawia się w historii i pozwala pobrać plik jednym kliknięciem.
 - Import i eksport korzystają z formatu `.csv` z nagłówkami w pierwszym wierszu: `Data`, `Odbiorca`, `Kwota`, `Etap`, `Typ wydatku`, `Notatki`, `Bank`, `Opis`.
 - Eksport jednym kliknięciem zapisuje wszystkie wydatki w pliku `wydatki_budowa.csv` (kodowanie UTF-8 z BOM), który otworzysz w Excelu lub Numbers.
 - Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz odświeżona strona raportów z animowanymi wykresami (Chart.js).
 
-## Import/eksport CSV – krok po kroku
+## Import/eksport danych – krok po kroku
 
 1. **Eksport danych:**
    - Wejdź do zakładki **Historia wydatków**.
@@ -62,13 +62,15 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
    - Otwórz swój arkusz z wydatkami lub plik `wydatki_budowa.csv` w Excelu.
    - Upewnij się, że pierwszy wiersz zawiera nagłówki dokładnie w kolejności: `Data`, `Odbiorca`, `Kwota`, `Etap`, `Typ wydatku`, `Notatki`, `Bank`, `Opis`.
    - W kolumnie „Etap” używaj wartości `ETAP 0`–`ETAP 5`, a w kolumnie „Typ wydatku” jednej z opcji: `Materialy`, `Zaliczka`, `Usluga`, `Robocizna`, `Inne`.
+   - Usuń symbole walut (np. `zł`, `PLN`) – aplikacja poradzi sobie ze spacjami i separatorami tysięcy.
    - Jeśli w kolumnie „Kwota” używasz przecinka jako separatora dziesiętnego, Excel automatycznie zapisze liczbę w poprawnym formacie.
    - Wybierz **Plik → Zapisz jako** (lub **Eksportuj**), ustaw format **CSV UTF-8 (rozdzielany przecinkami)**. W polskiej wersji Excela możesz też wybrać **CSV (rozdzielany średnikami)**.
    - Zamknij zapisany plik w Excelu, aby nie blokował odczytu podczas importu w aplikacji.
 
 3. **Import danych do aplikacji:**
-   - Przejdź do zakładki **Historia wydatków** i kliknij **Importuj z CSV**.
-   - Wybierz przygotowany plik `.csv` i potwierdź import. Aplikacja pokaże komunikat z liczbą dodanych wierszy oraz ewentualnymi pominiętymi rekordami.
+   - Przejdź do zakładki **Historia wydatków** i kliknij **Importuj dane**.
+   - Wybierz zakładkę **Plik CSV**, wskaż przygotowany plik `.csv` i potwierdź import **lub** wybierz zakładkę **Kopiuj / wklej z Excela**, skopiuj wiersze (razem z nagłówkiem) bezpośrednio z Excela i wklej w oknie dialogowym.
+   - Po zatwierdzeniu aplikacja poda liczbę dodanych pozycji oraz informację o ewentualnych pominiętych wierszach (np. z brakującymi danymi).
 
 ## Instrukcja krok po kroku dla macOS (dla początkujących)
 

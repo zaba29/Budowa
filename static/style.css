@@ -628,6 +628,53 @@ main {
     justify-content: flex-start;
 }
 
+.import-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0.5rem 0 1rem;
+}
+
+.chip {
+    border: 1px solid var(--card-border);
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--muted);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.chip:hover,
+.chip:focus-visible {
+    border-color: var(--accent);
+    color: var(--text);
+    transform: translateY(-1px);
+}
+
+.chip.active {
+    background: rgba(94, 234, 212, 0.16);
+    color: var(--text);
+    border-color: var(--accent);
+    box-shadow: 0 10px 30px rgba(94, 234, 212, 0.15);
+}
+
+.import-panel {
+    display: block;
+    margin-bottom: 1.25rem;
+}
+
+.import-panel[hidden] {
+    display: none;
+}
+
+.import-panel textarea {
+    font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, monospace;
+    white-space: pre;
+}
+
 .import-steps {
     margin: 0 0 1rem 1.2rem;
     padding: 0;

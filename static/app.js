@@ -243,9 +243,53 @@ function setupImportDialog() {
     }
 
     const cancel = document.getElementById('cancel-import');
+    const modeInput = document.getElementById('import-mode');
+    const fileInput = document.getElementById('import-file');
+    const pasteArea = document.getElementById('import-paste');
+    const modeButtons = dialog.querySelectorAll('[data-import-mode]');
+    const panels = dialog.querySelectorAll('[data-import-section]');
+
+    const setMode = (mode) => {
+        if (!modeInput) {
+            return;
+        }
+        modeInput.value = mode;
+        modeButtons.forEach((button) => {
+            const isActive = button.dataset.importMode === mode;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+        });
+        panels.forEach((panel) => {
+            const isActive = panel.dataset.importSection === mode;
+            panel.hidden = !isActive;
+            panel.setAttribute('aria-hidden', String(!isActive));
+        });
+        if (fileInput) {
+            if (mode === 'csv') {
+                fileInput.disabled = false;
+                fileInput.required = true;
+            } else {
+                fileInput.disabled = true;
+                fileInput.required = false;
+                fileInput.value = '';
+            }
+        }
+        if (pasteArea) {
+            if (mode === 'clipboard') {
+                pasteArea.disabled = false;
+                pasteArea.required = true;
+                pasteArea.focus();
+            } else {
+                pasteArea.value = '';
+                pasteArea.disabled = true;
+                pasteArea.required = false;
+            }
+        }
+    };
 
     trigger.addEventListener('click', () => {
         dialog.showModal();
+        setMode(modeInput ? modeInput.value || 'csv' : 'csv');
     });
 
     if (cancel) {
@@ -253,6 +297,21 @@ function setupImportDialog() {
             dialog.close();
         });
     }
+
+    modeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const mode = button.dataset.importMode;
+            if (mode) {
+                setMode(mode);
+            }
+        });
+    });
+
+    dialog.addEventListener('close', () => {
+        setMode('csv');
+    });
+
+    setMode(modeInput ? modeInput.value || 'csv' : 'csv');
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -13,7 +13,7 @@
             </a>
             {% if permissions.get('can_add') %}
             <button type="button" class="button outline" data-open-import>
-                Import z CSV
+                Importuj dane
             </button>
             {% endif %}
         </div>
@@ -156,19 +156,40 @@
 {% if permissions.get('can_add') %}
 <dialog id="import-dialog" class="modal">
     <form method="post" action="{{ url_for('import_expenses') }}" enctype="multipart/form-data" class="form-grid single">
-        <h3>Import z pliku CSV</h3>
-        <p class="muted">
-            Aby przygotować plik w Excelu:
-        </p>
-        <ol class="import-steps">
-            <li>Otwórz swój arkusz z wydatkami w programie Excel.</li>
-            <li>Ustaw w pierwszym wierszu nagłówki w kolejności: Data, Odbiorca, Kwota, Etap, Typ wydatku, Notatki, Bank, Opis.</li>
-            <li>Upewnij się, że kolumna „Kwota” zawiera wartości liczbowe, a kolumna „Etap” jedną z opcji ETAP 0–ETAP 5.</li>
-            <li>Wybierz <strong>Plik &gt; Zapisz jako</strong> i ustaw format <strong>CSV UTF-8 (rozdzielany przecinkami)</strong> lub <strong>CSV (rozdzielany średnikami)</strong>.</li>
-            <li>Zapisz plik, zamknij go w Excelu i wgraj poniżej, a następnie kliknij „Importuj”.</li>
-        </ol>
-        <label for="import-file" class="full-width">Plik CSV (.csv)</label>
-        <input type="file" id="import-file" name="file" accept=".csv" required class="full-width">
+        <h3>Import wydatków</h3>
+        <p class="muted">Wybierz wygodną metodę i przygotuj dane w kolejności: Data, Odbiorca, Kwota, Etap, Typ wydatku, Notatki, Bank, Opis.</p>
+
+        <div class="import-toggle" role="tablist">
+            <button type="button" class="chip active" data-import-mode="csv" aria-selected="true">Plik CSV</button>
+            <button type="button" class="chip" data-import-mode="clipboard" aria-selected="false">Kopiuj / wklej z Excela</button>
+        </div>
+
+        <input type="hidden" name="mode" id="import-mode" value="csv">
+
+        <section class="import-panel" data-import-section="csv">
+            <ol class="import-steps">
+                <li>Otwórz arkusz w Excelu i upewnij się, że pierwszy wiersz zawiera nagłówki opisane powyżej.</li>
+                <li>W kolumnie „Kwota” zostaw wyłącznie liczby (np. 1234,56) – usuń znaki waluty.</li>
+                <li>Kolumna „Etap” powinna mieć wartości ETAP 0 – ETAP 5, a „Typ wydatku” jedną z opcji w aplikacji.</li>
+                <li>Wybierz <strong>Plik &gt; Zapisz jako</strong> i wskaż format <strong>CSV UTF-8</strong> lub <strong>CSV (rozdzielany średnikami)</strong>.</li>
+                <li>Zamknij zapisany plik w Excelu, a następnie wgraj go poniżej i kliknij „Importuj”.</li>
+            </ol>
+            <label for="import-file" class="full-width">Plik CSV (.csv)</label>
+            <input type="file" id="import-file" name="file" accept=".csv" required class="full-width">
+        </section>
+
+        <section class="import-panel" data-import-section="clipboard" hidden>
+            <ol class="import-steps">
+                <li>Zaznacz w Excelu nagłówki oraz wiersze z danymi, które chcesz dodać.</li>
+                <li>Naciśnij <strong>⌘ + C</strong> (Mac) lub <strong>Ctrl + C</strong> (Windows), aby skopiować zaznaczone komórki.</li>
+                <li>Wklej zawartość skrótem <strong>⌘ + V</strong> / <strong>Ctrl + V</strong> w polu poniżej i sprawdź, czy wartości są w osobnych kolumnach (tabulator).</li>
+                <li>Upewnij się, że kwoty nie zawierają symboli walut, a etapy i typy odpowiadają opcjom w aplikacji.</li>
+                <li>Kliknij „Importuj”, aby dodać wszystkie poprawne wiersze – błędne zostaną pominięte.</li>
+            </ol>
+            <label for="import-paste" class="full-width">Skopiowane dane z Excela</label>
+            <textarea id="import-paste" name="pasted_data" rows="8" class="full-width" placeholder="Data | Odbiorca | Kwota | ETAP 1 | Materialy…" disabled></textarea>
+        </section>
+
         <div class="form-actions">
             <button type="submit" class="button primary">Importuj</button>
             <button type="button" class="button" id="cancel-import">Anuluj</button>

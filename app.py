@@ -1,6 +1,8 @@
 import csv
 import os
+import re
 import sqlite3
+import unicodedata
 from datetime import date, datetime
 from functools import wraps
 from io import BytesIO, StringIO
@@ -190,14 +192,158 @@ def create_app() -> Flask:
 
         return wrapped_view
 
+    def strip_accents(text: str) -> str:
+        normalized = unicodedata.normalize("NFKD", text or "")
+        return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+    def normalize_header(label: str) -> str:
+        simplified = strip_accents(label or "")
+        return " ".join(simplified.strip().lower().split())
+
+    def normalize_category(raw_value: str) -> str:
+        value = strip_accents((raw_value or "").strip()).upper()
+        if value in CATEGORIES:
+            return value
+        match = re.search(r"ETAP\s*([0-5])", value)
+        if match:
+            return f"ETAP {match.group(1)}"
+        return value
+
+    def normalize_expense_type(raw_value: str) -> str:
+        simplified = strip_accents((raw_value or "").strip())
+        for option in EXPENSE_TYPES:
+            if strip_accents(option).lower() == simplified.lower():
+                return option
+        return raw_value.strip() if raw_value else ""
+
     def parse_amount(raw_value: str) -> float:
-        cleaned = (raw_value or "").replace(" ", "").replace(",", ".")
+        cleaned = strip_accents(raw_value or "")
+        cleaned = cleaned.replace("\xa0", " ")
+        cleaned = cleaned.replace(",", ".")
+        cleaned = cleaned.replace("- ", "-")
+        cleaned = re.sub(r"[^0-9.\-]", "", cleaned)
+        cleaned = cleaned.strip()
+        if cleaned.count(".") > 1:
+            parts = cleaned.split(".")
+            cleaned = "".join(parts[:-1]) + "." + parts[-1]
         try:
             return float(cleaned)
         except ValueError as exc:
             raise ValueError(
                 "Nieprawidłowa kwota. Użyj cyfr oraz kropki lub przecinka."
             ) from exc
+
+    def create_dict_reader(content: str, delimiters: str, fallback: str) -> csv.DictReader:
+        stream = StringIO(content)
+        sample = stream.read(4096)
+        stream.seek(0)
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=delimiters)
+            stream.seek(0)
+            return csv.DictReader(stream, dialect=dialect)
+        except csv.Error:
+            stream.seek(0)
+            return csv.DictReader(stream, delimiter=fallback)
+
+    def prepare_header_map(reader: csv.DictReader) -> Dict[str, str]:
+        if not reader.fieldnames:
+            raise ValueError("Nie znaleziono nagłówka w pliku.")
+        normalized_headers = {
+            normalize_header(name): name for name in reader.fieldnames if name is not None
+        }
+        expected = {
+            "data": "expense_date",
+            "odbiorca": "merchant",
+            "kwota": "amount",
+            "etap": "category",
+            "typ wydatku": "expense_type",
+            "notatki": "notes",
+            "bank": "bank",
+            "opis": "description",
+        }
+        header_map: Dict[str, str] = {}
+        missing: List[str] = []
+        for label, field in expected.items():
+            source = normalized_headers.get(label)
+            if source is None:
+                missing.append(label)
+            else:
+                header_map[field] = source
+        if missing:
+            raise ValueError(
+                "Brakuje kolumny/kolumn: " + ", ".join(f"'{name}'" for name in missing)
+            )
+        return header_map
+
+    def process_import_rows(reader: csv.DictReader, db: sqlite3.Connection) -> Tuple[int, int]:
+        header_map = prepare_header_map(reader)
+
+        max_order_row = db.execute(
+            "SELECT COALESCE(MAX(display_order), -1) AS max_order FROM expenses"
+        ).fetchone()
+        current_max = max_order_row["max_order"] if max_order_row is not None else -1
+
+        inserted = 0
+        skipped = 0
+
+        for row in reader:
+            if row is None:
+                continue
+            values = {
+                field: (row.get(source, "") if row.get(source) is not None else "")
+                for field, source in header_map.items()
+            }
+            if all((value or "").strip() == "" for value in values.values()):
+                continue
+            try:
+                expense_date = parse_import_date(values["expense_date"])
+                merchant = (values["merchant"] or "").strip()
+                expense_type = normalize_expense_type(values["expense_type"])
+                category = normalize_category(values["category"])
+                notes = (values["notes"] or "").strip()
+                bank = (values["bank"] or "").strip()
+                description = (values["description"] or "").strip()
+                amount_raw = values["amount"]
+                if amount_raw is None or str(amount_raw).strip() == "":
+                    raise ValueError("Brak kwoty")
+                amount = parse_amount(str(amount_raw))
+
+                if (
+                    not merchant
+                    or category not in CATEGORIES
+                    or expense_type not in EXPENSE_TYPES
+                ):
+                    raise ValueError("Niepoprawne dane w wierszu")
+
+                current_max += 1
+                db.execute(
+                    """
+                    INSERT INTO expenses (
+                        expense_date, merchant, amount, category, notes, bank, description,
+                        expense_type, display_order, attachment_filename, attachment_mimetype, attachment_data
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        expense_date,
+                        merchant,
+                        amount,
+                        category,
+                        notes,
+                        bank,
+                        description,
+                        expense_type,
+                        current_max,
+                        None,
+                        None,
+                        None,
+                    ),
+                )
+                inserted += 1
+            except Exception:
+                skipped += 1
+
+        db.commit()
+        return inserted, skipped
 
     def prepare_attachment(file_storage) -> Tuple[str, str, bytes] | None:
         if not file_storage or not file_storage.filename:
@@ -277,7 +423,13 @@ def create_app() -> Flask:
             return value.isoformat()
         if isinstance(value, str):
             stripped = value.strip()
-            for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+            for fmt in (
+                "%Y-%m-%d",
+                "%d.%m.%Y",
+                "%d/%m/%Y",
+                "%d-%m-%Y",
+                "%Y/%m/%d",
+            ):
                 try:
                     return datetime.strptime(stripped, fmt).date().isoformat()
                 except ValueError:
@@ -665,141 +817,54 @@ def create_app() -> Flask:
     @login_required
     @permission_required("can_add")
     def import_expenses():
-        uploaded = request.files.get("file")
-        if uploaded is None or uploaded.filename == "":
-            flash("Wybierz plik w formacie CSV.", "error")
-            return redirect(url_for("history"))
-
-        raw_bytes = uploaded.read()
-        if not raw_bytes:
-            flash("Plik jest pusty.", "error")
-            return redirect(url_for("history"))
-
-        decoded_content = None
-        for encoding in ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2"):
-            try:
-                decoded_content = raw_bytes.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-        if decoded_content is None:
-            flash("Nie udało się odczytać pliku CSV. Upewnij się, że używasz kodowania UTF-8.", "error")
-            return redirect(url_for("history"))
-
-        stream = StringIO(decoded_content)
-        sample = stream.read(2048)
-        stream.seek(0)
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=";,")
-            stream.seek(0)
-            reader = csv.DictReader(stream, dialect=dialect)
-        except csv.Error:
-            stream.seek(0)
-            reader = csv.DictReader(stream, delimiter=";")
-
-        if not reader.fieldnames:
-            flash("Nie znaleziono nagłówka w pliku CSV.", "error")
-            return redirect(url_for("history"))
-
-        normalized_headers = {
-            (name or "").strip().lower(): name for name in reader.fieldnames
-        }
-        expected = {
-            "data": "expense_date",
-            "odbiorca": "merchant",
-            "kwota": "amount",
-            "etap": "category",
-            "typ wydatku": "expense_type",
-            "notatki": "notes",
-            "bank": "bank",
-            "opis": "description",
-        }
-        header_map: Dict[str, str] = {}
-        for label, field in expected.items():
-            source = normalized_headers.get(label)
-            if source is None:
-                flash(f"Brakuje kolumny '{label}' w nagłówku pliku.", "error")
-                return redirect(url_for("history"))
-            header_map[field] = source
-
+        mode = request.form.get("mode", "csv").lower()
         db = get_db()
-        max_order_row = db.execute(
-            "SELECT COALESCE(MAX(display_order), -1) AS max_order FROM expenses"
-        ).fetchone()
-        current_max = max_order_row["max_order"] if max_order_row is not None else -1
 
-        inserted = 0
-        skipped = 0
+        try:
+            if mode == "clipboard":
+                pasted = request.form.get("pasted_data", "")
+                if not pasted or pasted.strip() == "":
+                    raise ValueError("Wklej dane z Excela lub wybierz plik do importu.")
+                normalized_text = pasted.replace("\r\n", "\n").replace("\r", "\n").strip()
+                if not normalized_text.endswith("\n"):
+                    normalized_text += "\n"
+                reader = create_dict_reader(normalized_text, "	;,", "	")
+            else:
+                uploaded = request.files.get("file")
+                if uploaded is None or uploaded.filename == "":
+                    raise ValueError("Wybierz plik w formacie CSV.")
 
-        for row in reader:
-            if row is None:
-                continue
-            values = {
-                field: (row.get(source, "") if row.get(source) is not None else "")
-                for field, source in header_map.items()
-            }
-            if all((value or "").strip() == "" for value in values.values()):
-                continue
-            try:
-                expense_date = parse_import_date(values["expense_date"])
-                merchant = (values["merchant"] or "").strip()
-                expense_type_raw = (values["expense_type"] or "").strip()
-                category_raw = (values["category"] or "").strip()
-                category = category_raw.upper()
-                expense_type = next(
-                    (
-                        option
-                        for option in EXPENSE_TYPES
-                        if option.lower() == expense_type_raw.lower()
-                    ),
-                    expense_type_raw,
-                )
-                notes = (values["notes"] or "").strip()
-                bank = (values["bank"] or "").strip()
-                description = (values["description"] or "").strip()
-                amount_raw = values["amount"]
-                if amount_raw is None or str(amount_raw).strip() == "":
-                    raise ValueError("Brak kwoty")
-                amount = parse_amount(str(amount_raw))
+                raw_bytes = uploaded.read()
+                if not raw_bytes:
+                    raise ValueError("Plik jest pusty.")
 
-                if not merchant or category not in CATEGORIES or expense_type not in EXPENSE_TYPES:
-                    raise ValueError("Niepoprawne dane w wierszu")
+                decoded_content = None
+                for encoding in ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2"):
+                    try:
+                        decoded_content = raw_bytes.decode(encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                if decoded_content is None:
+                    raise ValueError("Nie udało się odczytać pliku CSV. Upewnij się, że używasz kodowania UTF-8.")
 
-                current_max += 1
-                db.execute(
-                    """
-                    INSERT INTO expenses (
-                        expense_date, merchant, amount, category, notes, bank, description,
-                        expense_type, display_order, attachment_filename, attachment_mimetype, attachment_data
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        expense_date,
-                        merchant,
-                        amount,
-                        category,
-                        notes,
-                        bank,
-                        description,
-                        expense_type,
-                        current_max,
-                        None,
-                        None,
-                        None,
-                    ),
-                )
-                inserted += 1
-            except Exception:
-                skipped += 1
+                reader = create_dict_reader(decoded_content, ";,", ";")
 
-        db.commit()
+            inserted, skipped = process_import_rows(reader, db)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("history"))
+        except Exception:
+            flash("Nie udało się przetworzyć importowanych danych.", "error")
+            return redirect(url_for("history"))
+
         if inserted:
             flash(
                 f"Zaimportowano {inserted} pozycji. Pominięto {skipped} wierszy.",
                 "success" if skipped == 0 else "info",
             )
         else:
-            flash("Nie udało się zaimportować żadnych danych z pliku CSV.", "error")
+            flash("Nie udało się zaimportować żadnych danych.", "error")
         return redirect(url_for("history"))
 
     @app.route("/users")
