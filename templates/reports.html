@@ -155,20 +155,6 @@
                 </div>
             </form>
         </div>
-        <div class="report-summary card glass">
-            <h3>Podsumowanie tekstowe</h3>
-            <ul id="summaryList" class="summary-list"></ul>
-            <div class="insights-grid">
-                <div>
-                    <h4>Top kontrahenci</h4>
-                    <ul id="merchantList" class="summary-list"></ul>
-                </div>
-                <div>
-                    <h4>Top źródła finansowania</h4>
-                    <ul id="bankList" class="summary-list"></ul>
-                </div>
-            </div>
-        </div>
     </div>
     <div class="reports-column">
         <div class="report-actions card glass">
@@ -204,6 +190,11 @@
                 <canvas id="timelineChart" height="260"></canvas>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="reports-data">
+    <div class="reports-data__row">
         <div class="live-report card glass">
             <div class="chart-header">
                 <h3>Multimedialny raport LIVE</h3>
@@ -219,20 +210,33 @@
                 </div>
             </div>
         </div>
+        <section class="report-table card glass">
+            <div class="table-header">
+                <div>
+                    <h3>Rejestr pozycji w raporcie</h3>
+                    <p class="muted small">Tabela wspiera sortowanie, wyszukiwanie, zaznaczanie i przenoszenie kolumn. Możesz też przeciągać wiersze, by stworzyć własną kolejność.</p>
+                </div>
+                <div class="table-actions">
+                    <button type="button" class="button" id="clearSelection">Wyczyść zaznaczenie</button>
+                </div>
+            </div>
+            <div id="reportTable" class="table-container" aria-live="polite"></div>
+        </section>
     </div>
-</section>
-
-<section class="report-table card glass">
-    <div class="table-header">
-        <div>
-            <h3>Rejestr pozycji w raporcie</h3>
-            <p class="muted small">Tabela wspiera sortowanie, wyszukiwanie, zaznaczanie i przenoszenie kolumn. Możesz też przeciągać wiersze, by stworzyć własną kolejność.</p>
-        </div>
-        <div class="table-actions">
-            <button type="button" class="button" id="clearSelection">Wyczyść zaznaczenie</button>
+    <div class="report-summary card glass">
+        <h3>Podsumowanie tekstowe</h3>
+        <ul id="summaryList" class="summary-list"></ul>
+        <div class="insights-grid">
+            <div>
+                <h4>Top kontrahenci</h4>
+                <ul id="merchantList" class="summary-list"></ul>
+            </div>
+            <div>
+                <h4>Top źródła finansowania</h4>
+                <ul id="bankList" class="summary-list"></ul>
+            </div>
         </div>
     </div>
-    <div id="reportTable" class="table-container" aria-live="polite"></div>
 </section>
 {% endblock %}
 {% block scripts %}
@@ -274,6 +278,7 @@ const typeOrder = {{ expense_types|tojson }};
     let stageChart;
     let typeChart;
     let timelineChart;
+    let timelineSummaries = [];
     let liveChart;
     let reportTable;
     let fallbackTable;
@@ -835,6 +840,7 @@ const typeOrder = {{ expense_types|tojson }};
 
         const months = (aggregates.monthly_totals || []).map((row) => row.month);
         const monthValues = (aggregates.monthly_totals || []).map((row) => Number(row.total || 0));
+        timelineSummaries = (aggregates.monthly_totals || []).map((row) => row.summary || '');
 
         if (timelineCtx) {
             if (!timelineChart) {
@@ -867,6 +873,23 @@ const typeOrder = {{ expense_types|tojson }};
                                     },
                                 },
                                 grid: { color: 'rgba(148, 163, 184, 0.2)' },
+                            },
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label(context) {
+                                        const value = context.parsed?.y ?? 0;
+                                        return `${context.dataset.label}: ${formatCurrency(value)}`;
+                                    },
+                                    afterLabel(context) {
+                                        const summary = timelineSummaries[context.dataIndex] || '';
+                                        if (!summary) {
+                                            return undefined;
+                                        }
+                                        return summary.split(' · ');
+                                    },
+                                },
                             },
                         },
                     },

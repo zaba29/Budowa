@@ -200,6 +200,53 @@ def create_app() -> Flask:
         simplified = strip_accents(label or "")
         return " ".join(simplified.strip().lower().split())
 
+    def clean_label(value: str | None) -> str:
+        return (value or "").strip()
+
+    def normalized_key(value: str | None) -> str:
+        return clean_label(value).casefold()
+
+    def choose_display_label(options: List[str]) -> str:
+        cleaned_options = [clean_label(option) for option in options if clean_label(option)]
+        if not cleaned_options:
+            return ""
+
+        def sort_key(label: str) -> tuple[int, int, int, str]:
+            lower_count = sum(1 for ch in label if ch.islower())
+            upper_count = sum(1 for ch in label if ch.isupper())
+            return (-lower_count, upper_count, len(label), label)
+
+        return sorted(cleaned_options, key=sort_key)[0]
+
+    def build_label_map(db: sqlite3.Connection, column: str) -> Dict[str, str]:
+        if column not in {"bank", "merchant"}:
+            raise ValueError("Unsupported column for label map")
+
+        rows = db.execute(
+            f"SELECT {column} FROM expenses WHERE {column} IS NOT NULL AND TRIM({column}) != ''"
+        ).fetchall()
+
+        variants: Dict[str, List[str]] = {}
+        for row in rows:
+            raw_value = row[column]
+            cleaned = clean_label(raw_value)
+            if not cleaned:
+                continue
+            key = normalized_key(cleaned)
+            variants.setdefault(key, []).append(cleaned)
+
+        label_map: Dict[str, str] = {}
+        for key, options in variants.items():
+            label_map[key] = choose_display_label(options)
+        return label_map
+
+    def canonicalize_label(value: str | None, mapping: Dict[str, str]) -> str:
+        cleaned = clean_label(value)
+        if not cleaned:
+            return ""
+        key = normalized_key(cleaned)
+        return mapping.get(key, cleaned)
+
     def normalize_category(raw_value: str) -> str:
         value = strip_accents((raw_value or "").strip()).upper()
         if value in CATEGORIES:
@@ -449,43 +496,108 @@ def create_app() -> Flask:
         results = db.execute(query, params).fetchall()
         return {row["expense_type"]: row["total"] for row in results}
 
-    def fetch_monthly_totals(
-        db: sqlite3.Connection, where_clause: str = "", params: Tuple = ()
-    ) -> List[sqlite3.Row]:
-        query = """
-            SELECT substr(expense_date, 1, 7) AS month, SUM(amount) AS total
-            FROM expenses
-        """
-        if where_clause:
-            query = f"{query} {where_clause}"
-        query = f"{query} GROUP BY substr(expense_date, 1, 7) ORDER BY month"
-        return db.execute(query, params).fetchall()
-
-    def fetch_top_totals(
-        db: sqlite3.Connection,
-        column: str,
-        where_clause: str = "",
-        params: Tuple = (),
+    def aggregate_top_by(
+        rows: List[Dict[str, object]],
+        field: str,
+        label_map: Dict[str, str],
+        *,
+        missing_label: str = "Brak danych",
         limit: int = 5,
     ) -> List[Dict[str, float]]:
-        if column not in {"merchant", "bank", "category", "expense_type"}:
-            raise ValueError("Unsupported column for totals")
+        totals: Dict[str, float] = {}
+        labels: Dict[str, str] = {}
 
-        label_expr = f"COALESCE({column}, 'Brak danych')"
-        query = f"SELECT {label_expr} AS label, SUM(amount) AS total FROM expenses"
-        if where_clause:
-            query = f"{query} {where_clause}"
-        query = (
-            f"{query} GROUP BY {label_expr} ORDER BY total DESC, label COLLATE NOCASE ASC LIMIT ?"
-        )
-        rows = db.execute(query, (*params, limit)).fetchall()
-        return [{"label": row["label"], "total": row["total"]} for row in rows]
+        for row in rows:
+            raw_value = row.get(field)
+            cleaned = clean_label(raw_value if isinstance(raw_value, str) else None)
+            if cleaned:
+                key = normalized_key(cleaned)
+                display_label = label_map.get(key, cleaned)
+            else:
+                key = "__missing__"
+                display_label = missing_label
+
+            amount = float(row.get("amount") or 0.0)
+            totals[key] = totals.get(key, 0.0) + amount
+            if key not in labels:
+                labels[key] = display_label
+
+        sorted_items = sorted(totals.items(), key=lambda item: item[1], reverse=True)
+        result: List[Dict[str, float]] = []
+        for key, total in sorted_items[:limit]:
+            label = labels.get(key, missing_label if key == "__missing__" else "")
+            result.append({"label": label or missing_label, "total": round(total, 2)})
+        return result
+
+    def build_monthly_breakdown(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
+        monthly: Dict[str, Dict[str, object]] = {}
+
+        for row in rows:
+            expense_date = str(row.get("expense_date") or "")
+            month = expense_date[:7]
+            if not month:
+                continue
+
+            entry = monthly.setdefault(
+                month,
+                {"total": 0.0, "count": 0, "categories": {}, "merchants": {}},
+            )
+            amount = float(row.get("amount") or 0.0)
+            entry["total"] = entry.get("total", 0.0) + amount
+            entry["count"] = entry.get("count", 0) + 1
+
+            category = clean_label(row.get("category") if isinstance(row.get("category"), str) else None)
+            if category:
+                categories = entry.setdefault("categories", {})
+                categories[category] = categories.get(category, 0.0) + amount
+
+            merchant = clean_label(row.get("merchant") if isinstance(row.get("merchant"), str) else None)
+            if merchant:
+                merchants = entry.setdefault("merchants", {})
+                merchants[merchant] = merchants.get(merchant, 0.0) + amount
+
+        breakdown: List[Dict[str, object]] = []
+        for month in sorted(monthly.keys()):
+            data = monthly[month]
+            total = float(data.get("total", 0.0))
+            count = int(data.get("count", 0))
+            categories: Dict[str, float] = data.get("categories", {})  # type: ignore[assignment]
+            merchants: Dict[str, float] = data.get("merchants", {})  # type: ignore[assignment]
+
+            summary_parts = [f"{count} {'pozycja' if count == 1 else 'pozycji'}"]
+            if categories:
+                top_category, top_category_total = max(categories.items(), key=lambda item: item[1])
+                summary_parts.append(
+                    f"Top etap: {top_category} ({top_category_total:.2f} PLN)"
+                )
+            if merchants:
+                top_merchant, top_merchant_total = max(merchants.items(), key=lambda item: item[1])
+                summary_parts.append(
+                    f"Top kontrahent: {top_merchant} ({top_merchant_total:.2f} PLN)"
+                )
+
+            breakdown.append(
+                {
+                    "month": month,
+                    "total": round(total, 2),
+                    "summary": " · ".join(summary_parts),
+                }
+            )
+
+        return breakdown
 
     def fetch_distinct_values(
         db: sqlite3.Connection, column: str, ordered: bool = True
     ) -> List[str]:
         if column not in {"bank", "merchant", "category", "expense_type"}:
             raise ValueError("Unsupported column for distinct values")
+
+        if column in {"bank", "merchant"}:
+            label_map = build_label_map(db, column)
+            labels = [label for label in label_map.values() if label]
+            if ordered:
+                labels.sort(key=lambda label: label.casefold())
+            return labels
 
         order_clause = "ORDER BY label COLLATE NOCASE" if ordered else ""
         query = (
@@ -582,14 +694,18 @@ def create_app() -> Flask:
         banks_filter = filters.get("banks")
         if banks_filter:
             placeholders = ",".join(["?"] * len(banks_filter))
-            conditions.append(f"COALESCE(bank, '') IN ({placeholders})")
-            params.extend(banks_filter)
+            conditions.append(
+                f"LOWER(TRIM(COALESCE(bank, ''))) IN ({placeholders})"
+            )
+            params.extend(normalized_key(value) for value in banks_filter)
 
         merchants_filter = filters.get("merchants")
         if merchants_filter:
             placeholders = ",".join(["?"] * len(merchants_filter))
-            conditions.append(f"merchant IN ({placeholders})")
-            params.extend(merchants_filter)
+            conditions.append(
+                f"LOWER(TRIM(COALESCE(merchant, ''))) IN ({placeholders})"
+            )
+            params.extend(normalized_key(value) for value in merchants_filter)
 
         min_amount = filters.get("min_amount")
         if isinstance(min_amount, (int, float)):
@@ -761,27 +877,35 @@ def create_app() -> Flask:
             params,
         ).fetchall()
 
-        expenses = [
-            {
-                "id": row["id"],
-                "expense_date": row["expense_date"],
-                "merchant": row["merchant"],
-                "amount": round(row["amount"], 2),
-                "category": row["category"],
-                "expense_type": row["expense_type"],
-                "bank": row["bank"],
-                "notes": row["notes"],
-                "description": row["description"],
-                "has_attachment": bool(row["has_attachment"]),
-            }
-            for row in expense_rows
-        ]
+        bank_label_map = build_label_map(db, "bank")
+        merchant_label_map = build_label_map(db, "merchant")
+
+        expenses: List[Dict[str, object]] = []
+        for row in expense_rows:
+            expenses.append(
+                {
+                    "id": row["id"],
+                    "expense_date": row["expense_date"],
+                    "merchant": canonicalize_label(row["merchant"], merchant_label_map),
+                    "amount": round(row["amount"], 2),
+                    "category": row["category"],
+                    "expense_type": row["expense_type"],
+                    "bank": canonicalize_label(row["bank"], bank_label_map),
+                    "notes": row["notes"],
+                    "description": row["description"],
+                    "has_attachment": bool(row["has_attachment"]),
+                }
+            )
 
         stage_totals = fetch_category_totals(db, where_clause, params)
         type_totals = fetch_type_totals(db, where_clause, params)
-        monthly_totals = fetch_monthly_totals(db, where_clause, params)
-        top_merchants = fetch_top_totals(db, "merchant", where_clause, params)
-        top_banks = fetch_top_totals(db, "bank", where_clause, params)
+        monthly_totals = build_monthly_breakdown(expenses)
+        top_merchants = aggregate_top_by(
+            expenses, "merchant", merchant_label_map, missing_label="Brak danych"
+        )
+        top_banks = aggregate_top_by(
+            expenses, "bank", bank_label_map, missing_label="Brak danych"
+        )
 
         total_spent = round(sum(item["amount"] for item in expenses), 2)
         total_count = len(expenses)
@@ -802,10 +926,7 @@ def create_app() -> Flask:
             "aggregates": {
                 "stage_totals": stage_totals,
                 "type_totals": type_totals,
-                "monthly_totals": [
-                    {"month": row["month"], "total": round(row["total"], 2)}
-                    for row in monthly_totals
-                ],
+                "monthly_totals": monthly_totals,
                 "top_merchants": top_merchants,
                 "top_banks": top_banks,
                 "total_spent": total_spent,
