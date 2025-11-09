@@ -26,6 +26,11 @@
     </div>
 </section>
 
+<div id="reportEmpty" class="empty-state card glass" hidden role="status" aria-live="polite">
+    <h3>Brak danych dla wybranych kryteriów</h3>
+    <p class="muted" id="reportEmptyMessage">Dostosuj filtry lub wyczyść je, aby zobaczyć podsumowanie.</p>
+</div>
+
 <section class="reports-layout">
     <div class="reports-column">
         <div class="report-controls card glass">
@@ -48,35 +53,39 @@
                 </div>
                 <div class="filter-field">
                     <label for="filter-categories">Etapy</label>
-                    <select id="filter-categories" name="categories" multiple size="6">
+                    <select id="filter-categories" class="enhanced-multiselect" name="categories" multiple size="6">
                         {% for category in categories %}
                         <option value="{{ category }}" {% if category in filters.get('categories', []) %}selected{% endif %}>{{ category }}</option>
                         {% endfor %}
                     </select>
+                    <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
                 <div class="filter-field">
                     <label for="filter-types">Typ wydatku</label>
-                    <select id="filter-types" name="expense_types" multiple size="5">
+                    <select id="filter-types" class="enhanced-multiselect" name="expense_types" multiple size="5">
                         {% for expense_type in expense_types %}
                         <option value="{{ expense_type }}" {% if expense_type in filters.get('expense_types', []) %}selected{% endif %}>{{ expense_type }}</option>
                         {% endfor %}
                     </select>
+                    <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
                 <div class="filter-field">
                     <label for="filter-banks">Bank</label>
-                    <select id="filter-banks" name="banks" multiple size="5">
+                    <select id="filter-banks" class="enhanced-multiselect" name="banks" multiple size="5">
                         {% for bank in banks %}
                         <option value="{{ bank }}" {% if bank in filters.get('banks', []) %}selected{% endif %}>{{ bank }}</option>
                         {% endfor %}
                     </select>
+                    <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
                 <div class="filter-field">
                     <label for="filter-merchants">Kontrahenci</label>
-                    <select id="filter-merchants" name="merchants" multiple size="5">
+                    <select id="filter-merchants" class="enhanced-multiselect" name="merchants" multiple size="5">
                         {% for merchant in merchants %}
                         <option value="{{ merchant }}" {% if merchant in filters.get('merchants', []) %}selected{% endif %}>{{ merchant }}</option>
                         {% endfor %}
                     </select>
+                    <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
                 <div class="filter-field">
                     <label for="filter-min">Kwota od (PLN)</label>
@@ -215,6 +224,11 @@ const typeOrder = {{ expense_types|tojson }};
     const exportExcelButton = document.getElementById('exportExcel');
     const downloadPdfButton = document.getElementById('downloadPdf');
     const printButton = document.getElementById('printReport');
+    const applyFiltersButton = document.getElementById('applyFilters');
+    const resetFiltersButton = document.getElementById('resetFilters');
+
+    const emptyState = document.getElementById('reportEmpty');
+    const emptyMessage = document.getElementById('reportEmptyMessage');
 
     const statTotal = document.getElementById('statTotal');
     const statCount = document.getElementById('statCount');
@@ -228,9 +242,83 @@ const typeOrder = {{ expense_types|tojson }};
     let reportTable;
     let currentPayload = initialPayload;
     let currentSelection = [];
+    let baseAggregates = (initialPayload && initialPayload.aggregates) || {};
+
+    const multiSelects = filtersForm
+        ? filtersForm.querySelectorAll('select.enhanced-multiselect')
+        : [];
 
     Chart.defaults.color = '#1e293b';
     Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
+
+    function updateMultiSummary(select) {
+        const summary = select.parentElement?.querySelector('[data-multiselect-summary]');
+        if (!summary) {
+            return;
+        }
+        const selected = Array.from(select.selectedOptions || []);
+        if (selected.length === 0) {
+            summary.textContent = 'Wszystkie';
+            summary.dataset.state = 'all';
+            return;
+        }
+
+        const labels = selected.map((option) => option.textContent.trim());
+        summary.dataset.state = 'partial';
+        if (labels.length <= 3) {
+            summary.textContent = labels.join(', ');
+        } else {
+            summary.textContent = `${labels.length} wybrane`;
+        }
+    }
+
+    function enhanceMultiSelects() {
+        const toggleOption = (select, option) => {
+            option.selected = !option.selected;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
+        multiSelects.forEach((select) => {
+            select.addEventListener('mousedown', (event) => {
+                if (event.target.tagName !== 'OPTION') {
+                    return;
+                }
+                event.preventDefault();
+                select.focus();
+                toggleOption(select, event.target);
+            });
+
+            select.addEventListener('keydown', (event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    const option = select.options[select.selectedIndex];
+                    if (option) {
+                        event.preventDefault();
+                        toggleOption(select, option);
+                    }
+                }
+            });
+
+            select.addEventListener('change', () => updateMultiSummary(select));
+            updateMultiSummary(select);
+        });
+
+        if (filtersForm) {
+            filtersForm.addEventListener('reset', () => {
+                window.requestAnimationFrame(() => {
+                    multiSelects.forEach((select) => {
+                        Array.from(select.options).forEach((option) => {
+                            option.selected = false;
+                        });
+                        updateMultiSummary(select);
+                    });
+                });
+            });
+        }
+    }
+
+    if (multiSelects.length) {
+        enhanceMultiSelects();
+    }
 
     function formatCurrency(value) {
         const numeric = Number(value) || 0;
@@ -267,6 +355,12 @@ const typeOrder = {{ expense_types|tojson }};
 
     function renderSummary(lines) {
         summaryList.innerHTML = '';
+        if (!lines.length) {
+            const li = document.createElement('li');
+            li.textContent = 'Brak danych dla wybranych kryteriów.';
+            summaryList.appendChild(li);
+            return;
+        }
         lines.forEach((line) => {
             const li = document.createElement('li');
             li.textContent = line;
@@ -302,6 +396,28 @@ const typeOrder = {{ expense_types|tojson }};
                 bankList.appendChild(li);
             });
         }
+    }
+
+    function updateEmptyState(payload) {
+        if (!emptyState || !emptyMessage) {
+            return;
+        }
+        const hasRows = (payload.rows || []).length > 0;
+        emptyState.hidden = hasRows;
+        if (!hasRows) {
+            const firstLine = (payload.summary_lines || []).find((line) => line && line.trim());
+            emptyMessage.textContent =
+                firstLine || 'Brak danych spełniających wybrane kryteria. Zmień filtr lub zresetuj ustawienia.';
+        }
+    }
+
+    function setFiltersLoading(isLoading) {
+        if (!applyFiltersButton) {
+            return;
+        }
+        applyFiltersButton.disabled = isLoading;
+        applyFiltersButton.classList.toggle('is-loading', isLoading);
+        applyFiltersButton.textContent = isLoading ? 'Aktualizuję…' : 'Zastosuj';
     }
 
     function computeAggregatesFromRows(rows) {
@@ -342,12 +458,15 @@ const typeOrder = {{ expense_types|tojson }};
         };
     }
 
-    function updateLiveSummary(rows) {
+    function updateLiveSummary(rows, { updateChart = false } = {}) {
         liveSummaryList.innerHTML = '';
         if (!rows.length) {
             const li = document.createElement('li');
             li.textContent = 'Zaznacz pozycje w tabeli, aby zobaczyć szczegóły.';
             liveSummaryList.appendChild(li);
+            if (updateChart) {
+                renderLiveChart({ stage_totals: {} });
+            }
             return;
         }
 
@@ -369,7 +488,9 @@ const typeOrder = {{ expense_types|tojson }};
             li.textContent = text;
             liveSummaryList.appendChild(li);
         });
-        renderLiveChart(aggregates);
+        if (updateChart) {
+            renderLiveChart(aggregates);
+        }
     }
 
     function renderLiveChart(aggregates) {
@@ -628,13 +749,16 @@ const typeOrder = {{ expense_types|tojson }};
         reportTable.on('rowSelectionChanged', (data) => {
             currentSelection = data;
             if (liveModeToggle.checked) {
-                updateLiveSummary(data);
+                updateLiveSummary(data, { updateChart: true });
             }
         });
 
         reportTable.on('dataChanged', () => {
             currentSelection = [];
-            updateLiveSummary([]);
+            updateLiveSummary([], { updateChart: liveModeToggle.checked });
+            if (!liveModeToggle.checked) {
+                renderLiveChart(baseAggregates);
+            }
         });
     }
 
@@ -646,25 +770,47 @@ const typeOrder = {{ expense_types|tojson }};
     }
 
     function syncView(payload) {
-        currentPayload = payload;
-        updateHero(payload.aggregates);
-        renderSummary(payload.summary_lines || []);
-        renderInsights(payload.aggregates || {});
-        renderCharts(payload.aggregates || {});
-        renderLiveChart(payload.aggregates || {});
-        initTable(payload.rows || []);
-        updateLiveSummary([]);
+        currentPayload = payload || {};
+        const aggregates = currentPayload.aggregates || {};
+        baseAggregates = aggregates;
+
+        updateHero(aggregates);
+        renderSummary(currentPayload.summary_lines || []);
+        renderInsights(aggregates);
+        renderCharts(aggregates);
+        updateEmptyState(currentPayload);
+
+        initTable(currentPayload.rows || []);
         currentSelection = [];
+        if (reportTable) {
+            reportTable.deselectRow();
+        }
+
+        if (liveModeToggle.checked) {
+            updateLiveSummary([], { updateChart: true });
+        } else {
+            updateLiveSummary([]);
+            renderLiveChart(aggregates);
+        }
     }
 
     async function fetchReportData(queryString) {
-        const response = await fetch(`/api/reports/data?${queryString}`, {
-            headers: { 'Accept': 'application/json' },
+        const url = queryString ? `/api/reports/data?${queryString}` : '/api/reports/data';
+        const response = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
         });
-        if (!response.ok) {
-            throw new Error('Nie udało się odczytać danych raportu.');
+
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+            throw new Error('Sesja mogła wygasnąć. Odśwież stronę i zaloguj się ponownie.');
         }
-        return response.json();
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data && data.error ? data.error : 'Nie udało się odczytać danych raportu.');
+        }
+        return data;
     }
 
     function buildQueryFromForm(form) {
@@ -701,6 +847,7 @@ const typeOrder = {{ expense_types|tojson }};
 
     filtersForm.addEventListener('submit', async (event) => {
         event.preventDefault();
+        setFiltersLoading(true);
         try {
             const query = buildQueryFromForm(filtersForm);
             const payload = await fetchReportData(query);
@@ -708,30 +855,40 @@ const typeOrder = {{ expense_types|tojson }};
             updateQueryInLocation(query);
         } catch (error) {
             alert(error.message || 'Nie udało się odświeżyć raportu.');
+        } finally {
+            setFiltersLoading(false);
         }
     });
 
-    document.getElementById('resetFilters').addEventListener('click', async () => {
-        filtersForm.reset();
-        try {
-            const payload = await fetchReportData('');
-            syncView(payload);
-            updateQueryInLocation('');
-        } catch (error) {
-            alert(error.message || 'Nie udało się zresetować raportu.');
-        }
-    });
+    if (resetFiltersButton) {
+        resetFiltersButton.addEventListener('click', async () => {
+            if (!filtersForm) {
+                return;
+            }
+            filtersForm.reset();
+            setFiltersLoading(true);
+            try {
+                const payload = await fetchReportData('');
+                syncView(payload);
+                updateQueryInLocation('');
+            } catch (error) {
+                alert(error.message || 'Nie udało się zresetować raportu.');
+            } finally {
+                setFiltersLoading(false);
+            }
+        });
+    }
 
     liveModeToggle.addEventListener('change', () => {
         if (liveModeToggle.checked) {
             if (currentSelection.length) {
-                updateLiveSummary(currentSelection);
+                updateLiveSummary(currentSelection, { updateChart: true });
             } else {
-                updateLiveSummary([]);
+                updateLiveSummary([], { updateChart: true });
             }
         } else {
             updateLiveSummary([]);
-            renderLiveChart(currentPayload.aggregates || {});
+            renderLiveChart(baseAggregates);
         }
     });
 
@@ -740,7 +897,10 @@ const typeOrder = {{ expense_types|tojson }};
             reportTable.deselectRow();
         }
         currentSelection = [];
-        updateLiveSummary([]);
+        updateLiveSummary([], { updateChart: liveModeToggle.checked });
+        if (!liveModeToggle.checked) {
+            renderLiveChart(baseAggregates);
+        }
     });
 
     exportExcelButton.addEventListener('click', () => {
