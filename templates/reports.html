@@ -51,40 +51,76 @@
                     <label for="filter-search">Szybkie wyszukiwanie</label>
                     <input type="text" id="filter-search" name="search" placeholder="np. faktura, wykonawca, etap" value="{{ filters.get('search', '') }}">
                 </div>
-                <div class="filter-field">
-                    <label for="filter-categories">Etapy</label>
-                    <select id="filter-categories" class="enhanced-multiselect" name="categories" multiple size="6">
+                <div class="filter-field" data-filter-group="categories">
+                    <div class="filter-field__header">
+                        <span class="field-label">Etapy</span>
+                        <div class="filter-field__actions">
+                            <button type="button" class="chip" data-select-all="categories">Wszystkie</button>
+                            <button type="button" class="chip ghost" data-clear-all="categories">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="checkbox-grid">
                         {% for category in categories %}
-                        <option value="{{ category }}" {% if category in filters.get('categories', []) %}selected{% endif %}>{{ category }}</option>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="categories" value="{{ category }}" data-label="{{ category }}" {% if category in filters.get('categories', []) %}checked{% endif %}>
+                            <span>{{ category }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                     <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
-                <div class="filter-field">
-                    <label for="filter-types">Typ wydatku</label>
-                    <select id="filter-types" class="enhanced-multiselect" name="expense_types" multiple size="5">
+                <div class="filter-field" data-filter-group="expense_types">
+                    <div class="filter-field__header">
+                        <span class="field-label">Typ wydatku</span>
+                        <div class="filter-field__actions">
+                            <button type="button" class="chip" data-select-all="expense_types">Wszystkie</button>
+                            <button type="button" class="chip ghost" data-clear-all="expense_types">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="checkbox-grid">
                         {% for expense_type in expense_types %}
-                        <option value="{{ expense_type }}" {% if expense_type in filters.get('expense_types', []) %}selected{% endif %}>{{ expense_type }}</option>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="expense_types" value="{{ expense_type }}" data-label="{{ expense_type }}" {% if expense_type in filters.get('expense_types', []) %}checked{% endif %}>
+                            <span>{{ expense_type }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                     <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
-                <div class="filter-field">
-                    <label for="filter-banks">Bank</label>
-                    <select id="filter-banks" class="enhanced-multiselect" name="banks" multiple size="5">
+                <div class="filter-field" data-filter-group="banks">
+                    <div class="filter-field__header">
+                        <span class="field-label">Bank</span>
+                        <div class="filter-field__actions">
+                            <button type="button" class="chip" data-select-all="banks">Wszystkie</button>
+                            <button type="button" class="chip ghost" data-clear-all="banks">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="checkbox-grid">
                         {% for bank in banks %}
-                        <option value="{{ bank }}" {% if bank in filters.get('banks', []) %}selected{% endif %}>{{ bank }}</option>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="banks" value="{{ bank }}" data-label="{{ bank }}" {% if bank in filters.get('banks', []) %}checked{% endif %}>
+                            <span>{{ bank }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                     <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
-                <div class="filter-field">
-                    <label for="filter-merchants">Kontrahenci</label>
-                    <select id="filter-merchants" class="enhanced-multiselect" name="merchants" multiple size="5">
+                <div class="filter-field" data-filter-group="merchants">
+                    <div class="filter-field__header">
+                        <span class="field-label">Kontrahenci</span>
+                        <div class="filter-field__actions">
+                            <button type="button" class="chip" data-select-all="merchants">Wszystkie</button>
+                            <button type="button" class="chip ghost" data-clear-all="merchants">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="checkbox-grid">
                         {% for merchant in merchants %}
-                        <option value="{{ merchant }}" {% if merchant in filters.get('merchants', []) %}selected{% endif %}>{{ merchant }}</option>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="merchants" value="{{ merchant }}" data-label="{{ merchant }}" {% if merchant in filters.get('merchants', []) %}checked{% endif %}>
+                            <span>{{ merchant }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                     <p class="multi-select__summary" data-multiselect-summary>Wszystkie</p>
                 </div>
                 <div class="filter-field">
@@ -200,11 +236,11 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-TdaIr05oig3NbS5FHYE97mOgNstsg12uVeOzY9iSdbBw2ALVfTpNjpMRylI3iAFQ" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/js/tabulator.min.js" integrity="sha384-pmeE0pvHFtvBi7LKMpkrgg8p9dFSczqZz7rHh9Q4WYSZL5bdy11P0gd4Cb4RNKJP" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-LAIXazhbugzuDUFcPRl1BDpRP70dNDO7xjoMnIKh4j/wcgUp3NEPoPFcAckU4iig" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/F+SXnq7P6/h1J9vYh3Y2yQtjcBnpJ+IHwPcPjnwvdoX2S61wqcV8szZCwXTlzAIXazhbugzuDUFcPRl1BDpRP70dNDO7xjoMnIKh4j/wcgUp3NEPoPFcAckU4iig" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js" integrity="sha512-aXwSgsC/K1I+uCOBmFcRAgjkYqFoX+0Gooy2cwrRez2oJ6TP2PzefDs2fzGEylh4G6dkprdFM5lTyBC0bYKT1A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js" referrerpolicy="no-referrer"></script>
 <script>
 const initialPayload = {{ report_payload|tojson }};
 const stageOrder = {{ categories|tojson }};
@@ -240,84 +276,217 @@ const typeOrder = {{ expense_types|tojson }};
     let timelineChart;
     let liveChart;
     let reportTable;
-    let currentPayload = initialPayload;
+    let fallbackTable;
+    let currentPayload =
+        initialPayload && typeof initialPayload === 'object' ? initialPayload : { rows: [], aggregates: {} };
     let currentSelection = [];
-    let baseAggregates = (initialPayload && initialPayload.aggregates) || {};
+    let baseAggregates = (currentPayload && currentPayload.aggregates) || {};
 
-    const multiSelects = filtersForm
-        ? filtersForm.querySelectorAll('select.enhanced-multiselect')
+    const checkboxGroups = filtersForm
+        ? filtersForm.querySelectorAll('[data-filter-group]')
         : [];
 
-    Chart.defaults.color = '#1e293b';
-    Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
+    const tabulatorAvailable = typeof Tabulator !== 'undefined';
+    const chartAvailable = typeof Chart !== 'undefined';
 
-    function updateMultiSummary(select) {
-        const summary = select.parentElement?.querySelector('[data-multiselect-summary]');
+    const tableColumns = [
+        { label: 'Data', field: 'expense_date' },
+        { label: 'Kontrahent', field: 'merchant' },
+        { label: 'Etap', field: 'category' },
+        { label: 'Typ', field: 'expense_type' },
+        { label: 'Kwota (PLN)', field: 'amount' },
+        { label: 'Bank', field: 'bank' },
+        { label: 'Notatki', field: 'notes' },
+        { label: 'Opis', field: 'description' },
+        { label: 'Załącznik', field: 'has_attachment' },
+    ];
+
+    if (chartAvailable) {
+        Chart.defaults.color = '#0f172a';
+        Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
+    }
+
+    if (!chartAvailable) {
+        document.querySelectorAll('.chart-card canvas, .live-chart canvas').forEach((canvas) => {
+            const container = canvas.parentElement;
+            if (!container) {
+                return;
+            }
+            if (!container.querySelector('.chart-warning')) {
+                const message = document.createElement('p');
+                message.className = 'muted small chart-warning';
+                message.textContent =
+                    'Wizualizacje wymagają połączenia z internetem w celu załadowania biblioteki Chart.js.';
+                container.appendChild(message);
+            }
+            canvas.style.display = 'none';
+        });
+        if (includeChartsToggle) {
+            includeChartsToggle.checked = false;
+            includeChartsToggle.disabled = true;
+            includeChartsToggle.parentElement?.classList.add('disabled');
+        }
+    }
+
+    if (!tabulatorAvailable) {
+        if (liveModeToggle) {
+            liveModeToggle.checked = false;
+            liveModeToggle.disabled = true;
+            liveModeToggle.parentElement?.classList.add('disabled');
+        }
+        if (clearSelectionButton) {
+            clearSelectionButton.disabled = true;
+            clearSelectionButton.classList.add('disabled');
+        }
+        const liveReport = document.querySelector('.live-report');
+        if (liveReport) {
+            liveReport.classList.add('is-disabled');
+            liveReport.setAttribute('aria-disabled', 'true');
+        }
+    }
+
+    function updateGroupSummary(group) {
+        const summary = group.querySelector('[data-multiselect-summary]');
         if (!summary) {
             return;
         }
-        const selected = Array.from(select.selectedOptions || []);
-        if (selected.length === 0) {
+        const checkboxes = group.querySelectorAll('input[type="checkbox"][name]');
+        const checked = Array.from(checkboxes).filter((checkbox) => checkbox.checked);
+        if (checked.length === 0) {
             summary.textContent = 'Wszystkie';
             summary.dataset.state = 'all';
             return;
         }
 
-        const labels = selected.map((option) => option.textContent.trim());
+        const labels = checked.map((checkbox) => checkbox.dataset.label || checkbox.value);
         summary.dataset.state = 'partial';
-        if (labels.length <= 3) {
-            summary.textContent = labels.join(', ');
-        } else {
-            summary.textContent = `${labels.length} wybrane`;
-        }
+        summary.textContent = labels.length <= 3 ? labels.join(', ') : `${labels.length} wybrane`;
     }
 
-    function enhanceMultiSelects() {
-        const toggleOption = (select, option) => {
-            option.selected = !option.selected;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-        };
+    function setupCheckboxGroups() {
+        checkboxGroups.forEach((group) => {
+            const checkboxes = group.querySelectorAll('input[type="checkbox"][name]');
+            const selectAllTrigger = group.querySelector('[data-select-all]');
+            const clearAllTrigger = group.querySelector('[data-clear-all]');
 
-        multiSelects.forEach((select) => {
-            select.addEventListener('mousedown', (event) => {
-                if (event.target.tagName !== 'OPTION') {
-                    return;
-                }
-                event.preventDefault();
-                select.focus();
-                toggleOption(select, event.target);
+            checkboxes.forEach((checkbox) => {
+                checkbox.addEventListener('change', () => updateGroupSummary(group));
             });
 
-            select.addEventListener('keydown', (event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                    const option = select.options[select.selectedIndex];
-                    if (option) {
-                        event.preventDefault();
-                        toggleOption(select, option);
-                    }
-                }
-            });
+            if (selectAllTrigger) {
+                selectAllTrigger.addEventListener('click', () => {
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.checked = true;
+                    });
+                    updateGroupSummary(group);
+                });
+            }
 
-            select.addEventListener('change', () => updateMultiSummary(select));
-            updateMultiSummary(select);
+            if (clearAllTrigger) {
+                clearAllTrigger.addEventListener('click', () => {
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.checked = false;
+                    });
+                    updateGroupSummary(group);
+                });
+            }
+
+            updateGroupSummary(group);
         });
 
         if (filtersForm) {
             filtersForm.addEventListener('reset', () => {
                 window.requestAnimationFrame(() => {
-                    multiSelects.forEach((select) => {
-                        Array.from(select.options).forEach((option) => {
-                            option.selected = false;
-                        });
-                        updateMultiSummary(select);
-                    });
+                    checkboxGroups.forEach((group) => updateGroupSummary(group));
                 });
             });
         }
     }
 
-    if (multiSelects.length) {
-        enhanceMultiSelects();
+    if (checkboxGroups.length) {
+        setupCheckboxGroups();
+    }
+
+    function renderSimpleTable(rows) {
+        if (!tableContainer) {
+            return;
+        }
+        if (!fallbackTable) {
+            fallbackTable = document.createElement('table');
+            fallbackTable.className = 'simple-report-table';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            tableColumns.forEach((column) => {
+                const th = document.createElement('th');
+                th.textContent = column.label;
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            fallbackTable.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            fallbackTable.appendChild(tbody);
+            tableContainer.innerHTML = '';
+            tableContainer.appendChild(fallbackTable);
+        }
+
+        const tbody = fallbackTable.querySelector('tbody');
+        if (!tbody) {
+            return;
+        }
+
+        tbody.innerHTML = '';
+        if (!rows.length) {
+            const emptyRow = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = tableColumns.length;
+            cell.textContent = 'Brak danych do wyświetlenia.';
+            emptyRow.appendChild(cell);
+            tbody.appendChild(emptyRow);
+            return;
+        }
+
+        rows.forEach((row) => {
+            const tr = document.createElement('tr');
+            tableColumns.forEach((column) => {
+                const td = document.createElement('td');
+                let value = row[column.field];
+                if (column.field === 'amount') {
+                    value = formatCurrency(value);
+                } else if (column.field === 'has_attachment') {
+                    value = row[column.field] ? 'Dostępny' : '-';
+                }
+                if (value === undefined || value === null || value === '') {
+                    value = '-';
+                }
+                td.textContent = value;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function prepareRowsForExport(rows) {
+        return rows.map((row) => ({
+            Data: row.expense_date || '-',
+            Kontrahent: row.merchant || '-',
+            Etap: row.category || '-',
+            Typ: row.expense_type || '-',
+            Kwota: Number(row.amount || 0),
+            Bank: row.bank || '-',
+            Notatki: row.notes || '-',
+            Opis: row.description || '-',
+            'Załącznik': row.has_attachment ? 'TAK' : 'NIE',
+        }));
+    }
+
+    function triggerDownload(blob, filename) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
 
     function formatCurrency(value) {
@@ -494,10 +663,14 @@ const typeOrder = {{ expense_types|tojson }};
     }
 
     function renderLiveChart(aggregates) {
+        if (!chartAvailable) {
+            return;
+        }
         const ctx = document.getElementById('liveChart');
         if (!ctx) {
             return;
         }
+        ctx.style.display = '';
         const stageTotals = Object.entries(aggregates.stage_totals || {}).sort((a, b) => b[1] - a[1]);
         const labels = stageTotals.map((item) => item[0]);
         const data = stageTotals.map((item) => Number(item[1] || 0));
@@ -550,9 +723,22 @@ const typeOrder = {{ expense_types|tojson }};
     }
 
     function renderCharts(aggregates) {
+        if (!chartAvailable) {
+            return;
+        }
         const stageCtx = document.getElementById('stageChart');
         const typeCtx = document.getElementById('typeChart');
         const timelineCtx = document.getElementById('timelineChart');
+
+        if (stageCtx) {
+            stageCtx.style.display = '';
+        }
+        if (typeCtx) {
+            typeCtx.style.display = '';
+        }
+        if (timelineCtx) {
+            timelineCtx.style.display = '';
+        }
 
         const palette = ['#2563eb', '#f97316', '#10b981', '#a855f7', '#f59e0b', '#0ea5e9'];
 
@@ -695,6 +881,11 @@ const typeOrder = {{ expense_types|tojson }};
 
     function initTable(rows) {
         if (!tableContainer) {
+            return;
+        }
+
+        if (!tabulatorAvailable) {
+            renderSimpleTable(rows);
             return;
         }
 
@@ -893,7 +1084,7 @@ const typeOrder = {{ expense_types|tojson }};
     });
 
     clearSelectionButton.addEventListener('click', () => {
-        if (reportTable) {
+        if (tabulatorAvailable && reportTable) {
             reportTable.deselectRow();
         }
         currentSelection = [];
@@ -904,15 +1095,40 @@ const typeOrder = {{ expense_types|tojson }};
     });
 
     exportExcelButton.addEventListener('click', () => {
-        if (!reportTable) {
+        const fileName = `raport_wydatkow_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        if (tabulatorAvailable && reportTable) {
+            const hasSelection = reportTable.getSelectedRows().length > 0;
+            reportTable.download('xlsx', fileName, {
+                sheetName: 'Raport',
+                rowRange: hasSelection ? 'selected' : 'active',
+            });
             return;
         }
-        const hasSelection = reportTable.getSelectedRows().length > 0;
-        const fileName = `raport_wydatkow_${new Date().toISOString().slice(0, 10)}.xlsx`;
-        reportTable.download('xlsx', fileName, {
-            sheetName: 'Raport',
-            rowRange: hasSelection ? 'selected' : 'active',
-        });
+
+        const rows = getActiveRows();
+        if (!rows.length) {
+            alert('Brak danych do eksportu.');
+            return;
+        }
+
+        const exportRows = prepareRowsForExport(rows);
+        if (typeof XLSX !== 'undefined' && XLSX.utils && XLSX.utils.json_to_sheet) {
+            const worksheet = XLSX.utils.json_to_sheet(exportRows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Raport');
+            XLSX.writeFile(workbook, fileName);
+        } else {
+            const header = Object.keys(exportRows[0]).join(';');
+            const lines = exportRows.map((row) =>
+                Object.values(row)
+                    .map((value) => `${value}`.replace(/;/g, ','))
+                    .join(';'),
+            );
+            const blob = new Blob([`\ufeff${[header, ...lines].join('\n')}`], {
+                type: 'text/csv;charset=utf-8;',
+            });
+            triggerDownload(blob, fileName.replace(/\.xlsx$/, '.csv'));
+        }
     });
 
     downloadPdfButton.addEventListener('click', () => {
