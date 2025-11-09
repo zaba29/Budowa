@@ -249,6 +249,96 @@ function setupImportDialog() {
     const modeButtons = dialog.querySelectorAll('[data-import-mode]');
     const panels = dialog.querySelectorAll('[data-import-section]');
 
+    const expectedHeaders = [
+        'Data',
+        'Odbiorca',
+        'Kwota',
+        'Etap',
+        'Typ wydatku',
+        'Notatki',
+        'Bank',
+        'Opis',
+    ];
+
+    const simplify = (value) =>
+        value
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const ensureTabs = (line) => {
+        if (line.includes('\t')) {
+            return line;
+        }
+        return line.replace(/\s{2,}/g, '\t');
+    };
+
+    const tidyAmount = (value) => {
+        if (!value) {
+            return '';
+        }
+        let cleaned = value.replace(/zł|zl|pln/gi, '');
+        cleaned = cleaned.replace(/\s+/g, '');
+        cleaned = cleaned.replace(/,/g, '.');
+        cleaned = cleaned.replace(/(?<=\d)\.(?=\d{3}(?:\D|$))/g, '');
+        return cleaned.trim();
+    };
+
+    const tidyStage = (value) => {
+        if (!value) {
+            return '';
+        }
+        const match = value.match(/etap\s*([0-5])/i);
+        if (match) {
+            return `ETAP ${match[1]}`;
+        }
+        return value.trim();
+    };
+
+    const autoFormatClipboard = (raw) => {
+        if (!raw) {
+            return '';
+        }
+        const normalizedLines = raw
+            .replace(/\r\n?/g, '\n')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line !== '');
+        if (normalizedLines.length === 0) {
+            return '';
+        }
+
+        const firstCells = ensureTabs(normalizedLines[0])
+            .split('\t')
+            .map(simplify);
+        const expectedSimplified = expectedHeaders.map(simplify);
+        const headerMatches = expectedSimplified.every(
+            (expected, index) => firstCells[index] && firstCells[index] === expected,
+        );
+
+        const rows = [];
+        const startIndex = headerMatches ? 1 : 0;
+        for (let i = startIndex; i < normalizedLines.length; i += 1) {
+            const columns = ensureTabs(normalizedLines[i])
+                .split('\t')
+                .map((cell) => cell.trim());
+            while (columns.length < expectedHeaders.length) {
+                columns.push('');
+            }
+            columns.length = expectedHeaders.length;
+            columns[2] = tidyAmount(columns[2]);
+            columns[3] = tidyStage(columns[3]);
+            columns[4] = columns[4] ? columns[4].replace(/\s+/g, ' ').trim() : '';
+            rows.push(columns.join('\t'));
+        }
+
+        const headerLine = expectedHeaders.join('\t');
+        const finalLines = [headerLine, ...rows];
+        return `${finalLines.join('\n')}\n`;
+    };
+
     const setMode = (mode) => {
         if (!modeInput) {
             return;
@@ -279,6 +369,7 @@ function setupImportDialog() {
                 pasteArea.disabled = false;
                 pasteArea.required = true;
                 pasteArea.focus();
+                pasteArea.value = autoFormatClipboard(pasteArea.value);
             } else {
                 pasteArea.value = '';
                 pasteArea.disabled = true;
@@ -312,6 +403,22 @@ function setupImportDialog() {
     });
 
     setMode(modeInput ? modeInput.value || 'csv' : 'csv');
+
+    if (pasteArea) {
+        pasteArea.addEventListener('paste', (event) => {
+            const clipboardData = event.clipboardData || window.clipboardData;
+            if (!clipboardData) {
+                return;
+            }
+            event.preventDefault();
+            const text = clipboardData.getData('text');
+            pasteArea.value = autoFormatClipboard(text);
+        });
+
+        pasteArea.addEventListener('blur', () => {
+            pasteArea.value = autoFormatClipboard(pasteArea.value);
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,14 +1,16 @@
 :root {
-    --bg-gradient: radial-gradient(circle at top left, #0f172a 0%, #1e3a8a 45%, #0ea5e9 100%);
-    --card-bg: rgba(15, 23, 42, 0.6);
+    --bg-gradient: linear-gradient(160deg, #f8fafc 0%, #eef2ff 45%, #dbeafe 100%);
+    --card-bg: rgba(255, 255, 255, 0.9);
     --card-border: rgba(148, 163, 184, 0.35);
-    --primary: #38bdf8;
-    --primary-dark: #0ea5e9;
-    --danger: #f87171;
-    --text: #f8fafc;
-    --muted: rgba(226, 232, 240, 0.75);
-    --border: rgba(148, 163, 184, 0.25);
-    --shadow: 0 24px 45px rgba(15, 23, 42, 0.35);
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --danger: #ef4444;
+    --text: #0f172a;
+    --muted: rgba(71, 85, 105, 0.85);
+    --border: rgba(148, 163, 184, 0.35);
+    --shadow: 0 18px 42px rgba(148, 163, 184, 0.25);
+    --surface-muted: rgba(241, 245, 249, 0.85);
+    --surface-soft: rgba(255, 255, 255, 0.75);
     font-family: 'Segoe UI', Tahoma, sans-serif;
 }
 
@@ -21,18 +23,19 @@ body {
 }
 
 .top-bar {
-    background: rgba(15, 23, 42, 0.65);
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--text);
     padding: 1rem 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
-    backdrop-filter: blur(16px);
-    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 12px 28px rgba(148, 163, 184, 0.25);
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom: 1px solid var(--card-border);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 .brand h1 {
@@ -57,9 +60,9 @@ body {
 }
 
 .nav-link:hover {
-    background: rgba(56, 189, 248, 0.18);
-    color: var(--text);
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary-dark);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
 
 .user-info {
@@ -71,7 +74,7 @@ body {
 
 .user-name {
     font-weight: 600;
-    color: var(--muted);
+    color: var(--text);
 }
 
 main {
@@ -102,7 +105,7 @@ main {
     position: absolute;
     inset: -40% -20% auto;
     height: 240px;
-    background: radial-gradient(circle at top, rgba(59, 130, 246, 0.45), transparent 65%);
+    background: radial-gradient(circle at top, rgba(37, 99, 235, 0.2), transparent 65%);
     filter: blur(40px);
     opacity: 0.9;
     pointer-events: none;
@@ -127,25 +130,26 @@ main {
 }
 
 .stat-card {
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--card-bg);
     border-radius: 18px;
     padding: 1.1rem 1.25rem;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: 0 12px 24px rgba(148, 163, 184, 0.18);
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    transition: transform 0.25s ease, border 0.25s ease;
+    transition: transform 0.25s ease, border 0.25s ease, box-shadow 0.25s ease;
 }
 
 .stat-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(56, 189, 248, 0.55);
+    border-color: rgba(37, 99, 235, 0.35);
+    box-shadow: 0 16px 32px rgba(148, 163, 184, 0.25);
 }
 
 .stat-card.primary {
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.65), rgba(59, 130, 246, 0.45));
-    border-color: rgba(56, 189, 248, 0.65);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(191, 219, 254, 0.5));
+    border-color: rgba(37, 99, 235, 0.45);
 }
 
 .stat-label {
@@ -194,7 +198,7 @@ main {
 }
 
 .card {
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--card-bg);
     border-radius: 24px;
     padding: 2rem;
     box-shadow: var(--shadow);
@@ -203,11 +207,11 @@ main {
 }
 
 .card.glass {
-    background: rgba(15, 23, 42, 0.5);
+    background: var(--surface-soft);
 }
 
 .card.glass:hover {
-    border-color: rgba(56, 189, 248, 0.35);
+    border-color: rgba(37, 99, 235, 0.3);
 }
 
 .card h2 {
@@ -230,8 +234,8 @@ main {
     justify-content: space-between;
     padding: 0.6rem 0.75rem;
     border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: var(--surface-muted);
 }
 
 .summary h3 {
@@ -278,20 +282,20 @@ main {
     width: 100%;
     padding: 0.65rem 0.75rem;
     border-radius: 12px;
-    border: 1px solid var(--card-border);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     font-size: 1rem;
     box-sizing: border-box;
-    background: rgba(15, 23, 42, 0.35);
+    background: var(--surface-soft);
     color: var(--text);
-    transition: border 0.2s ease, box-shadow 0.2s ease;
+    transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .form-grid input:focus,
 .form-grid select:focus,
 .form-grid textarea:focus {
     outline: none;
-    border-color: rgba(56, 189, 248, 0.7);
-    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25);
+    border-color: rgba(37, 99, 235, 0.45);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .form-grid textarea {
@@ -304,7 +308,7 @@ main {
 
 .form-grid input[type="file"] {
     padding: 0.35rem 0.75rem;
-    background: rgba(15, 23, 42, 0.3);
+    background: var(--surface-muted);
     border-style: dashed;
 }
 
@@ -383,7 +387,7 @@ main {
     padding: 0.6rem 1.25rem;
     border-radius: 999px;
     border: 1px solid transparent;
-    background: rgba(148, 163, 184, 0.25);
+    background: rgba(148, 163, 184, 0.18);
     color: var(--text);
     text-decoration: none;
     font-weight: 600;
@@ -394,37 +398,38 @@ main {
 
 .button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.35);
+    box-shadow: 0 12px 24px rgba(148, 163, 184, 0.25);
 }
 
 .button.primary {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
 }
 
 .button.primary:hover {
-    border-color: rgba(14, 165, 233, 0.6);
+    border-color: rgba(37, 99, 235, 0.6);
 }
 
 .button.outline {
     background: transparent;
-    border-color: rgba(148, 163, 184, 0.4);
+    border-color: rgba(148, 163, 184, 0.5);
 }
 
 .button.outline:hover {
-    border-color: rgba(56, 189, 248, 0.65);
-    background: rgba(148, 163, 184, 0.15);
+    border-color: rgba(37, 99, 235, 0.6);
+    background: rgba(37, 99, 235, 0.1);
 }
 
 .button.danger {
-    background: rgba(248, 113, 113, 0.2);
-    color: #fecaca;
-    border-color: rgba(248, 113, 113, 0.35);
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+    border-color: rgba(239, 68, 68, 0.35);
 }
 
 .button.danger:hover {
-    border-color: rgba(248, 113, 113, 0.6);
-    background: rgba(248, 113, 113, 0.3);
+    border-color: rgba(239, 68, 68, 0.55);
+    background: rgba(239, 68, 68, 0.18);
 }
 
 .button:disabled {
@@ -438,7 +443,7 @@ main {
     overflow-x: auto;
     border-radius: 18px;
     border: 1px solid var(--card-border);
-    background: rgba(15, 23, 42, 0.45);
+    background: var(--card-bg);
 }
 
 .table-wrapper table {
@@ -450,20 +455,21 @@ main {
 .table-wrapper th,
 .table-wrapper td {
     padding: 0.85rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
     text-align: left;
     vertical-align: top;
 }
 
 .table-wrapper th {
-    background: rgba(148, 163, 184, 0.15);
+    background: rgba(191, 219, 254, 0.6);
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    color: var(--primary-dark);
 }
 
 .table-wrapper tbody tr:hover {
-    background: rgba(56, 189, 248, 0.12);
+    background: rgba(37, 99, 235, 0.08);
 }
 
 .table-wrapper tbody tr:last-child td {
@@ -473,13 +479,13 @@ main {
 .drag-cell {
     width: 2.5rem;
     text-align: center;
-    color: var(--muted);
+    color: rgba(100, 116, 139, 0.8);
 }
 
 .drag-handle {
     cursor: grab;
     font-size: 1.2rem;
-    color: var(--muted);
+    color: rgba(100, 116, 139, 0.9);
     display: inline-block;
 }
 
@@ -531,26 +537,26 @@ main {
 .messages li {
     padding: 0.75rem 1rem;
     border-radius: 12px;
-    border: 1px solid var(--card-border);
-    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: var(--surface-soft);
 }
 
 .messages .error {
-    border-color: rgba(248, 113, 113, 0.5);
-    background: rgba(248, 113, 113, 0.18);
-    color: #fecaca;
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(254, 226, 226, 0.9);
+    color: #991b1b;
 }
 
 .messages .success {
-    border-color: rgba(74, 222, 128, 0.45);
-    background: rgba(34, 197, 94, 0.18);
-    color: #bbf7d0;
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(220, 252, 231, 0.9);
+    color: #166534;
 }
 
 .messages .warning {
-    border-color: rgba(251, 191, 36, 0.45);
-    background: rgba(250, 204, 21, 0.2);
-    color: #fef08a;
+    border-color: rgba(251, 191, 36, 0.35);
+    background: rgba(254, 243, 199, 0.9);
+    color: #92400e;
 }
 
 .muted {
@@ -602,14 +608,14 @@ main {
     border-radius: 24px;
     padding: 2rem;
     width: min(640px, 92vw);
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(255, 255, 255, 0.96);
     color: var(--text);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(24px);
+    box-shadow: 0 24px 48px rgba(148, 163, 184, 0.25);
+    backdrop-filter: blur(18px);
 }
 
 .modal::backdrop {
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(15, 23, 42, 0.35);
 }
 
 .form-grid.single {
@@ -636,9 +642,9 @@ main {
 }
 
 .chip {
-    border: 1px solid var(--card-border);
-    background: rgba(148, 163, 184, 0.12);
-    color: var(--muted);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    background: rgba(191, 219, 254, 0.4);
+    color: var(--primary-dark);
     padding: 0.45rem 1rem;
     border-radius: 999px;
     font-weight: 600;
@@ -649,16 +655,16 @@ main {
 
 .chip:hover,
 .chip:focus-visible {
-    border-color: var(--accent);
-    color: var(--text);
+    border-color: rgba(37, 99, 235, 0.55);
+    color: var(--primary-dark);
     transform: translateY(-1px);
 }
 
 .chip.active {
-    background: rgba(94, 234, 212, 0.16);
-    color: var(--text);
-    border-color: var(--accent);
-    box-shadow: 0 10px 30px rgba(94, 234, 212, 0.15);
+    background: rgba(37, 99, 235, 0.2);
+    color: var(--primary-dark);
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: 0 10px 24px rgba(148, 163, 184, 0.2);
 }
 
 .import-panel {
@@ -711,7 +717,7 @@ main {
     padding: 0.75rem;
     border: 1px solid var(--card-border);
     border-radius: 12px;
-    background: rgba(15, 23, 42, 0.4);
+    background: var(--surface-muted);
     grid-column: span 2;
 }
 
@@ -741,8 +747,8 @@ main {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(14px);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
 }
 
 .user-card header {
@@ -781,7 +787,7 @@ main {
     border-radius: 12px;
     border: 1px solid var(--card-border);
     font-size: 1rem;
-    background: rgba(15, 23, 42, 0.35);
+    background: var(--surface-soft);
     color: var(--text);
 }
 

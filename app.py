@@ -245,6 +245,66 @@ def create_app() -> Flask:
             stream.seek(0)
             return csv.DictReader(stream, delimiter=fallback)
 
+    def normalize_clipboard_text(content: str) -> str:
+        lines: List[str] = []
+        for raw_line in content.splitlines():
+            if raw_line.strip() == "":
+                continue
+            if "\t" not in raw_line and ";" not in raw_line and "," not in raw_line:
+                cleaned = re.sub(r"\s{2,}", "\t", raw_line.strip())
+            else:
+                cleaned = raw_line.strip()
+            lines.append(cleaned)
+        return "\n".join(lines)
+
+    def ensure_clipboard_header(content: str) -> str:
+        if content.strip() == "":
+            return content
+
+        expected_headers = [
+            "Data",
+            "Odbiorca",
+            "Kwota",
+            "Etap",
+            "Typ wydatku",
+            "Notatki",
+            "Bank",
+            "Opis",
+        ]
+        normalized_expected = [normalize_header(label) for label in expected_headers]
+
+        first_line = content.lstrip().splitlines()[0]
+        candidates = re.split(r"[\t;,]", first_line)
+        normalized_candidates = [normalize_header(cell) for cell in candidates]
+
+        header_matches = True
+        for index, expected in enumerate(normalized_expected):
+            if index >= len(normalized_candidates):
+                header_matches = False
+                break
+            if normalized_candidates[index] != expected:
+                header_matches = False
+                break
+
+        if header_matches:
+            return content
+
+        header_line = "\t".join(expected_headers)
+        prefix = header_line + "\n"
+        if content.startswith("\n"):
+            return header_line + content
+        return prefix + content
+
+    def history_redirect_url() -> str:
+        sort_param = request.args.get("sort") or request.form.get("sort")
+        direction_param = request.args.get("direction") or request.form.get("direction")
+        params: Dict[str, str] = {}
+        if sort_param:
+            params["sort"] = sort_param
+        if direction_param and sort_param != "display_order":
+            params["direction"] = direction_param
+        return url_for("history", **params)
+
     def prepare_header_map(reader: csv.DictReader) -> Dict[str, str]:
         if not reader.fieldnames:
             raise ValueError("Nie znaleziono nagłówka w pliku.")
@@ -604,6 +664,7 @@ def create_app() -> Flask:
         description = request.form.get("description", "").strip()
         expense_type = request.form.get("expense_type", "").strip()
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        history_url = history_redirect_url()
         remove_attachment = request.form.get("remove_attachment") in {"on", "1", "true"}
         attachment_file = request.files.get("attachment")
 
@@ -614,7 +675,7 @@ def create_app() -> Flask:
             flash(message, "error")
             if is_ajax:
                 return jsonify({"error": message}), 400
-            return redirect(url_for("history"))
+            return redirect(history_url)
 
         if (
             not expense_date
@@ -628,7 +689,7 @@ def create_app() -> Flask:
             flash(message, "error")
             if is_ajax:
                 return jsonify({"error": message}), 400
-            return redirect(url_for("history"))
+            return redirect(history_url)
 
         db = get_db()
         existing = db.execute(
@@ -640,7 +701,7 @@ def create_app() -> Flask:
             if is_ajax:
                 return jsonify({"error": message}), 404
             flash(message, "error")
-            return redirect(url_for("history"))
+            return redirect(history_url)
 
         current_attachment = {
             "filename": existing["attachment_filename"],
@@ -655,7 +716,7 @@ def create_app() -> Flask:
             if is_ajax:
                 return jsonify({"error": message}), 400
             flash(message, "error")
-            return redirect(url_for("history"))
+            return redirect(history_url)
 
         if attachment_payload:
             attachment_filename, attachment_mimetype, attachment_data = attachment_payload
@@ -704,8 +765,8 @@ def create_app() -> Flask:
         success_message = "Wydatek został zaktualizowany."
         flash(success_message, "success")
         if is_ajax:
-            return jsonify({"redirect": url_for("history")})
-        return redirect(url_for("history"))
+            return jsonify({"redirect": history_url})
+        return redirect(history_url)
 
     @app.post("/expenses/<int:expense_id>/delete")
     @login_required
@@ -715,7 +776,7 @@ def create_app() -> Flask:
         db.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
         db.commit()
         flash("Wpis został usunięty.", "success")
-        return redirect(url_for("history"))
+        return redirect(history_redirect_url())
 
     @app.post("/expenses/reorder")
     @login_required
@@ -819,6 +880,7 @@ def create_app() -> Flask:
     def import_expenses():
         mode = request.form.get("mode", "csv").lower()
         db = get_db()
+        history_url = history_redirect_url()
 
         try:
             if mode == "clipboard":
@@ -826,6 +888,8 @@ def create_app() -> Flask:
                 if not pasted or pasted.strip() == "":
                     raise ValueError("Wklej dane z Excela lub wybierz plik do importu.")
                 normalized_text = pasted.replace("\r\n", "\n").replace("\r", "\n").strip()
+                normalized_text = normalize_clipboard_text(normalized_text)
+                normalized_text = ensure_clipboard_header(normalized_text)
                 if not normalized_text.endswith("\n"):
                     normalized_text += "\n"
                 reader = create_dict_reader(normalized_text, "	;,", "	")
@@ -853,10 +917,10 @@ def create_app() -> Flask:
             inserted, skipped = process_import_rows(reader, db)
         except ValueError as exc:
             flash(str(exc), "error")
-            return redirect(url_for("history"))
+            return redirect(history_url)
         except Exception:
             flash("Nie udało się przetworzyć importowanych danych.", "error")
-            return redirect(url_for("history"))
+            return redirect(history_url)
 
         if inserted:
             flash(
@@ -865,7 +929,7 @@ def create_app() -> Flask:
             )
         else:
             flash("Nie udało się zaimportować żadnych danych.", "error")
-        return redirect(url_for("history"))
+        return redirect(history_url)
 
     @app.route("/users")
     @login_required

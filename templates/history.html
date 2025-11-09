@@ -59,7 +59,7 @@
             </thead>
             <tbody>
                 {% for expense in expenses %}
-                <tr class="draggable-row" data-expense-id="{{ expense.id }}" data-expense='{{ expense|tojson }}' data-update-url="{{ url_for('update_expense', expense_id=expense.id) }}" data-has-attachment="{{ 'true' if expense.has_attachment else 'false' }}" data-attachment-name="{{ (expense.attachment_filename or '')|e }}" data-attachment-url="{{ expense.attachment_url|e }}">
+                <tr class="draggable-row" data-expense-id="{{ expense.id }}" data-expense='{{ expense|tojson }}' data-update-url="{{ url_for('update_expense', expense_id=expense.id, sort=current_sort, direction=current_direction if current_sort != 'display_order' else None) }}" data-has-attachment="{{ 'true' if expense.has_attachment else 'false' }}" data-attachment-name="{{ (expense.attachment_filename or '')|e }}" data-attachment-url="{{ expense.attachment_url|e }}">
                     <td class="drag-cell">{% if permissions.get('can_edit') %}<span class="drag-handle" title="Złap i przeciągnij">⋮⋮</span>{% endif %}</td>
                     <td>{{ expense.expense_date }}</td>
                     <td>{{ expense.merchant }}</td>
@@ -81,7 +81,7 @@
                         <button type="button" class="button" data-action="edit">Edytuj</button>
                         {% endif %}
                         {% if permissions.get('can_delete') %}
-                        <form method="post" action="{{ url_for('delete_expense', expense_id=expense.id) }}" onsubmit="return confirm('Na pewno usunąć ten wpis?');">
+                        <form method="post" action="{{ url_for('delete_expense', expense_id=expense.id, sort=current_sort, direction=current_direction if current_sort != 'display_order' else None) }}" onsubmit="return confirm('Na pewno usunąć ten wpis?');">
                             <button type="submit" class="button danger">Usuń</button>
                         </form>
                         {% endif %}
@@ -165,6 +165,10 @@
         </div>
 
         <input type="hidden" name="mode" id="import-mode" value="csv">
+        <input type="hidden" name="sort" value="{{ current_sort }}">
+        {% if current_sort != 'display_order' %}
+        <input type="hidden" name="direction" value="{{ current_direction }}">
+        {% endif %}
 
         <section class="import-panel" data-import-section="csv">
             <ol class="import-steps">
