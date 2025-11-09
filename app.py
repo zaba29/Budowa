@@ -429,27 +429,390 @@ def create_app() -> Flask:
         mimetype = file_storage.mimetype or "application/octet-stream"
         return filename, mimetype, data
 
-    def fetch_category_totals(db: sqlite3.Connection) -> Dict[str, float]:
-        results = db.execute(
-            "SELECT category, SUM(amount) as total FROM expenses GROUP BY category"
-        ).fetchall()
+    def fetch_category_totals(
+        db: sqlite3.Connection, where_clause: str = "", params: Tuple = ()
+    ) -> Dict[str, float]:
+        query = "SELECT category, SUM(amount) as total FROM expenses"
+        if where_clause:
+            query = f"{query} {where_clause}"
+        query = f"{query} GROUP BY category"
+        results = db.execute(query, params).fetchall()
         return {row["category"]: row["total"] for row in results}
 
-    def fetch_type_totals(db: sqlite3.Connection) -> Dict[str, float]:
-        results = db.execute(
-            "SELECT expense_type, SUM(amount) as total FROM expenses GROUP BY expense_type"
-        ).fetchall()
+    def fetch_type_totals(
+        db: sqlite3.Connection, where_clause: str = "", params: Tuple = ()
+    ) -> Dict[str, float]:
+        query = "SELECT expense_type, SUM(amount) as total FROM expenses"
+        if where_clause:
+            query = f"{query} {where_clause}"
+        query = f"{query} GROUP BY expense_type"
+        results = db.execute(query, params).fetchall()
         return {row["expense_type"]: row["total"] for row in results}
 
-    def fetch_monthly_totals(db: sqlite3.Connection) -> List[sqlite3.Row]:
-        return db.execute(
-            """
+    def fetch_monthly_totals(
+        db: sqlite3.Connection, where_clause: str = "", params: Tuple = ()
+    ) -> List[sqlite3.Row]:
+        query = """
             SELECT substr(expense_date, 1, 7) AS month, SUM(amount) AS total
             FROM expenses
-            GROUP BY substr(expense_date, 1, 7)
-            ORDER BY month
-            """
+        """
+        if where_clause:
+            query = f"{query} {where_clause}"
+        query = f"{query} GROUP BY substr(expense_date, 1, 7) ORDER BY month"
+        return db.execute(query, params).fetchall()
+
+    def fetch_top_totals(
+        db: sqlite3.Connection,
+        column: str,
+        where_clause: str = "",
+        params: Tuple = (),
+        limit: int = 5,
+    ) -> List[Dict[str, float]]:
+        if column not in {"merchant", "bank", "category", "expense_type"}:
+            raise ValueError("Unsupported column for totals")
+
+        label_expr = f"COALESCE({column}, 'Brak danych')"
+        query = f"SELECT {label_expr} AS label, SUM(amount) AS total FROM expenses"
+        if where_clause:
+            query = f"{query} {where_clause}"
+        query = (
+            f"{query} GROUP BY {label_expr} ORDER BY total DESC, label COLLATE NOCASE ASC LIMIT ?"
+        )
+        rows = db.execute(query, (*params, limit)).fetchall()
+        return [{"label": row["label"], "total": row["total"]} for row in rows]
+
+    def fetch_distinct_values(
+        db: sqlite3.Connection, column: str, ordered: bool = True
+    ) -> List[str]:
+        if column not in {"bank", "merchant", "category", "expense_type"}:
+            raise ValueError("Unsupported column for distinct values")
+
+        order_clause = "ORDER BY label COLLATE NOCASE" if ordered else ""
+        query = (
+            f"SELECT DISTINCT COALESCE({column}, '') AS label "
+            f"FROM expenses "
+            f"WHERE COALESCE({column}, '') != '' "
+            f"{order_clause}"
+        )
+        rows = db.execute(query).fetchall()
+        return [row["label"] for row in rows if row["label"]]
+
+    def _get_multi_values(args, key: str) -> List[str]:
+        values = args.getlist(key)
+        if not values:
+            raw = args.get(key, "")
+            if raw:
+                values = [item.strip() for item in raw.split(",") if item.strip()]
+        return [value for value in values if value]
+
+    def parse_report_filters(args) -> Dict[str, object]:
+        filters: Dict[str, object] = {}
+
+        start_date = args.get("start_date", "").strip()
+        end_date = args.get("end_date", "").strip()
+        if start_date:
+            filters["start_date"] = start_date
+        if end_date:
+            filters["end_date"] = end_date
+
+        categories_filter = _get_multi_values(args, "categories")
+        if categories_filter:
+            filters["categories"] = categories_filter
+
+        types_filter = _get_multi_values(args, "expense_types")
+        if types_filter:
+            filters["expense_types"] = types_filter
+
+        banks_filter = _get_multi_values(args, "banks")
+        if banks_filter:
+            filters["banks"] = banks_filter
+
+        merchants_filter = _get_multi_values(args, "merchants")
+        if merchants_filter:
+            filters["merchants"] = merchants_filter
+
+        search = args.get("search", "").strip()
+        if search:
+            filters["search"] = search
+
+        min_amount = args.get("min_amount")
+        max_amount = args.get("max_amount")
+        try:
+            if min_amount not in (None, ""):
+                filters["min_amount"] = float(str(min_amount).replace(",", "."))
+        except ValueError:
+            pass
+        try:
+            if max_amount not in (None, ""):
+                filters["max_amount"] = float(str(max_amount).replace(",", "."))
+        except ValueError:
+            pass
+
+        attachment = args.get("attachment")
+        if attachment in {"with", "without"}:
+            filters["attachment"] = attachment
+
+        return filters
+
+    def build_where_clause(filters: Dict[str, object]) -> Tuple[str, Tuple]:
+        conditions: List[str] = []
+        params: List[object] = []
+
+        start_date = filters.get("start_date")
+        end_date = filters.get("end_date")
+        if start_date:
+            conditions.append("expense_date >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("expense_date <= ?")
+            params.append(end_date)
+
+        categories_filter = filters.get("categories")
+        if categories_filter:
+            placeholders = ",".join(["?"] * len(categories_filter))
+            conditions.append(f"category IN ({placeholders})")
+            params.extend(categories_filter)
+
+        types_filter = filters.get("expense_types")
+        if types_filter:
+            placeholders = ",".join(["?"] * len(types_filter))
+            conditions.append(f"expense_type IN ({placeholders})")
+            params.extend(types_filter)
+
+        banks_filter = filters.get("banks")
+        if banks_filter:
+            placeholders = ",".join(["?"] * len(banks_filter))
+            conditions.append(f"COALESCE(bank, '') IN ({placeholders})")
+            params.extend(banks_filter)
+
+        merchants_filter = filters.get("merchants")
+        if merchants_filter:
+            placeholders = ",".join(["?"] * len(merchants_filter))
+            conditions.append(f"merchant IN ({placeholders})")
+            params.extend(merchants_filter)
+
+        min_amount = filters.get("min_amount")
+        if isinstance(min_amount, (int, float)):
+            conditions.append("amount >= ?")
+            params.append(min_amount)
+
+        max_amount = filters.get("max_amount")
+        if isinstance(max_amount, (int, float)):
+            conditions.append("amount <= ?")
+            params.append(max_amount)
+
+        search = filters.get("search")
+        if search:
+            like_value = f"%{search}%"
+            conditions.append(
+                "(merchant LIKE ? OR notes LIKE ? OR description LIKE ? OR category LIKE ? OR expense_type LIKE ?)"
+            )
+            params.extend([like_value] * 5)
+
+        attachment = filters.get("attachment")
+        if attachment == "with":
+            conditions.append("attachment_data IS NOT NULL AND length(attachment_data) > 0")
+        elif attachment == "without":
+            conditions.append("(attachment_data IS NULL OR length(attachment_data) = 0)")
+
+        clause = " AND ".join(conditions)
+        if clause:
+            clause = f"WHERE {clause}"
+        return clause, tuple(params)
+
+    def describe_filters(filters: Dict[str, object]) -> str:
+        parts: List[str] = []
+        start_date = filters.get("start_date")
+        end_date = filters.get("end_date")
+        if start_date and end_date:
+            parts.append(f"okres od {start_date} do {end_date}")
+        elif start_date:
+            parts.append(f"od {start_date}")
+        elif end_date:
+            parts.append(f"do {end_date}")
+
+        if filters.get("categories"):
+            parts.append(
+                "etapy: " + ", ".join(str(value) for value in filters["categories"])
+            )
+        if filters.get("expense_types"):
+            parts.append(
+                "typy wydatków: "
+                + ", ".join(str(value) for value in filters["expense_types"])
+            )
+        if filters.get("banks"):
+            parts.append("banki: " + ", ".join(str(value) for value in filters["banks"]))
+        if filters.get("merchants"):
+            parts.append(
+                "kontrahenci: " + ", ".join(str(value) for value in filters["merchants"])
+            )
+
+        if isinstance(filters.get("min_amount"), (int, float)) or isinstance(
+            filters.get("max_amount"), (int, float)
+        ):
+            min_amount = (
+                f"{filters['min_amount']:.2f}"
+                if isinstance(filters.get("min_amount"), (int, float))
+                else "-"
+            )
+            max_amount = (
+                f"{filters['max_amount']:.2f}"
+                if isinstance(filters.get("max_amount"), (int, float))
+                else "-"
+            )
+            parts.append(f"zakres kwot: {min_amount} – {max_amount} PLN")
+
+        if filters.get("attachment") == "with":
+            parts.append("tylko z załącznikami")
+        elif filters.get("attachment") == "without":
+            parts.append("bez załączników")
+
+        if filters.get("search"):
+            parts.append(f"wyszukiwanie: \"{filters['search']}\"")
+
+        if not parts:
+            return "Pełny zakres danych (bez dodatkowych filtrów)."
+        return ", ".join(parts)
+
+    def build_text_summary(
+        total: float,
+        count: int,
+        stage_totals: Dict[str, float],
+        type_totals: Dict[str, float],
+        top_merchants: List[Dict[str, float]],
+        top_banks: List[Dict[str, float]],
+        filters: Dict[str, object],
+    ) -> List[str]:
+        if count == 0:
+            return [
+                "Brak danych spełniających wybrane kryteria. Zmień filtr lub zresetuj ustawienia, aby zobaczyć raport."
+            ]
+
+        summary: List[str] = []
+        summary.append(
+            f"Łącznie uwzględniono {count} pozycji na kwotę {total:.2f} PLN."
+        )
+        summary.append(f"Zakres raportu: {describe_filters(filters)}")
+
+        sorted_stages = sorted(
+            stage_totals.items(), key=lambda item: item[1], reverse=True
+        )
+        if sorted_stages:
+            top_stage_label, top_stage_value = sorted_stages[0]
+            summary.append(
+                f"Najdroższy etap: {top_stage_label} ({top_stage_value:.2f} PLN)."
+            )
+            if len(sorted_stages) > 1:
+                runner_up = ", ".join(
+                    f"{label} ({value:.2f} PLN)" for label, value in sorted_stages[1:3]
+                )
+                if runner_up:
+                    summary.append(f"Kolejne etapy: {runner_up}.")
+
+        sorted_types = sorted(
+            type_totals.items(), key=lambda item: item[1], reverse=True
+        )
+        if sorted_types:
+            type_line = ", ".join(
+                f"{label}: {value:.2f} PLN" for label, value in sorted_types[:3]
+            )
+            summary.append(
+                "Dominujące typy wydatków: " + type_line + ("." if not type_line.endswith(".") else "")
+            )
+
+        if top_merchants:
+            merchants_line = ", ".join(
+                f"{row['label']} ({row['total']:.2f} PLN)" for row in top_merchants
+            )
+            summary.append(f"Najwięcej wydaliśmy u: {merchants_line}.")
+
+        if top_banks:
+            banks_line = ", ".join(
+                f"{row['label']} ({row['total']:.2f} PLN)" for row in top_banks
+            )
+            summary.append(f"Finansowanie według banków: {banks_line}.")
+
+        return summary
+
+    def compile_report_dataset(
+        db: sqlite3.Connection, filters: Dict[str, object]
+    ) -> Dict[str, object]:
+        where_clause, params = build_where_clause(filters)
+        expense_rows = db.execute(
+            f"""
+            SELECT
+                id,
+                expense_date,
+                merchant,
+                amount,
+                category,
+                expense_type,
+                bank,
+                notes,
+                description,
+                CASE
+                    WHEN attachment_data IS NOT NULL AND length(attachment_data) > 0 THEN 1
+                    ELSE 0
+                END AS has_attachment
+            FROM expenses
+            {where_clause}
+            ORDER BY expense_date DESC, id DESC
+            """,
+            params,
         ).fetchall()
+
+        expenses = [
+            {
+                "id": row["id"],
+                "expense_date": row["expense_date"],
+                "merchant": row["merchant"],
+                "amount": round(row["amount"], 2),
+                "category": row["category"],
+                "expense_type": row["expense_type"],
+                "bank": row["bank"],
+                "notes": row["notes"],
+                "description": row["description"],
+                "has_attachment": bool(row["has_attachment"]),
+            }
+            for row in expense_rows
+        ]
+
+        stage_totals = fetch_category_totals(db, where_clause, params)
+        type_totals = fetch_type_totals(db, where_clause, params)
+        monthly_totals = fetch_monthly_totals(db, where_clause, params)
+        top_merchants = fetch_top_totals(db, "merchant", where_clause, params)
+        top_banks = fetch_top_totals(db, "bank", where_clause, params)
+
+        total_spent = round(sum(item["amount"] for item in expenses), 2)
+        total_count = len(expenses)
+
+        summary_lines = build_text_summary(
+            total_spent,
+            total_count,
+            stage_totals,
+            type_totals,
+            top_merchants,
+            top_banks,
+            filters,
+        )
+
+        return {
+            "filters": filters,
+            "rows": expenses,
+            "aggregates": {
+                "stage_totals": stage_totals,
+                "type_totals": type_totals,
+                "monthly_totals": [
+                    {"month": row["month"], "total": round(row["total"], 2)}
+                    for row in monthly_totals
+                ],
+                "top_merchants": top_merchants,
+                "top_banks": top_banks,
+                "total_spent": total_spent,
+                "total_count": total_count,
+            },
+            "summary_lines": summary_lines,
+        }
 
     def fetch_expenses(
         db: sqlite3.Connection, requested_sort: str, direction: str
@@ -1055,45 +1418,28 @@ def create_app() -> Flask:
     @permission_required("can_view_reports")
     def reports():
         db = get_db()
-        category_totals = fetch_category_totals(db)
-        type_totals = fetch_type_totals(db)
-        monthly_totals = fetch_monthly_totals(db)
+        filters = parse_report_filters(request.args)
+        dataset = compile_report_dataset(db, filters)
 
-        stage_labels = CATEGORIES
-        stage_values = [round(category_totals.get(label, 0.0), 2) for label in stage_labels]
-
-        type_labels = EXPENSE_TYPES
-        type_values = [round(type_totals.get(label, 0.0), 2) for label in type_labels]
-
-        month_labels = [row["month"] for row in monthly_totals]
-        month_values = [round(row["total"], 2) for row in monthly_totals]
-
-        total_spent = round(sum(stage_values), 2)
-        stage_pairs = list(zip(stage_labels, stage_values))
-        type_pairs = list(zip(type_labels, type_values))
-
-        top_stage_label, top_stage_value = ("-", 0.0)
-        if stage_pairs:
-            top_stage_label, top_stage_value = max(stage_pairs, key=lambda item: item[1])
-
-        top_type_label, top_type_value = ("-", 0.0)
-        if type_pairs:
-            top_type_label, top_type_value = max(type_pairs, key=lambda item: item[1])
+        banks = fetch_distinct_values(db, "bank")
+        merchants = fetch_distinct_values(db, "merchant")
 
         return render_template(
             "reports.html",
-            stage_labels=stage_labels,
-            stage_values=stage_values,
-            type_labels=type_labels,
-            type_values=type_values,
-            month_labels=month_labels,
-            month_values=month_values,
-            total_spent=total_spent,
-            top_stage_label=top_stage_label,
-            top_stage_value=round(top_stage_value, 2),
-            top_type_label=top_type_label,
-            top_type_value=round(top_type_value, 2),
+            filters=filters,
+            banks=banks,
+            merchants=merchants,
+            report_payload=dataset,
         )
+
+    @app.get("/api/reports/data")
+    @login_required
+    @permission_required("can_view_reports")
+    def reports_data():
+        db = get_db()
+        filters = parse_report_filters(request.args)
+        dataset = compile_report_dataset(db, filters)
+        return jsonify(dataset)
 
     return app
 

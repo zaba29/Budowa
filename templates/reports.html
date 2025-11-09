@@ -1,155 +1,824 @@
 {% extends 'base.html' %}
-{% block title %}Raporty wydatków{% endblock %}
+{% block title %}Zaawansowane raporty{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/css/tabulator_modern.min.css" integrity="sha384-pVZ4DpcKkHNNtBWqUIUtZ92AUg9F+Ik3ylcUp+zzZogI2dskms7F9I7xZC5ZlX6p" crossorigin="anonymous">
+{% endblock %}
 {% block content %}
 <section class="reports-hero card glass">
     <div class="reports-hero__text">
-        <h2>Raport wydatków</h2>
-        <p class="muted">Interaktywne wykresy pomagają szybko ocenić, które etapy i typy kosztują najwięcej oraz jak zmieniają się wydatki w czasie.</p>
+        <h2>Centrum raportów finansowych</h2>
+        <p class="muted">Buduj własne przekroje danych, wizualizuj kluczowe wskaźniki i generuj raporty do współdzielenia z kontraktorami.</p>
     </div>
     <div class="reports-hero__stats">
         <div class="stat-card primary">
             <span class="stat-label">Łączne wydatki</span>
-            <span class="stat-value">{{ '%.2f'|format(total_spent) }} PLN</span>
+            <span class="stat-value" id="statTotal">0,00 PLN</span>
+            <span class="stat-sub" id="statCount">0 pozycji</span>
         </div>
         <div class="stat-card">
             <span class="stat-label">Najdroższy etap</span>
-            <span class="stat-value">{{ top_stage_label }} · {{ '%.2f'|format(top_stage_value) }} PLN</span>
+            <span class="stat-value" id="statStage">-</span>
         </div>
         <div class="stat-card">
             <span class="stat-label">Dominujący typ</span>
-            <span class="stat-value">{{ top_type_label }} · {{ '%.2f'|format(top_type_value) }} PLN</span>
+            <span class="stat-value" id="statType">-</span>
         </div>
     </div>
 </section>
 
-<section class="reports-grid">
-    <div class="chart-card card glass">
-        <div class="chart-header">
-            <h3>Wydatki według etapów</h3>
-            <p class="muted">Porównanie kosztów między etapami budowy.</p>
+<section class="reports-layout">
+    <div class="reports-column">
+        <div class="report-controls card glass">
+            <div class="report-controls__header">
+                <h3>Filtry raportu</h3>
+                <p class="muted small">Zaznacz dowolne kryteria, aby zawęzić raport. Dane oraz wizualizacje aktualizują się po kliknięciu „Zastosuj”.</p>
+            </div>
+            <form id="reportFilters" class="filter-grid">
+                <div class="filter-field">
+                    <label for="filter-start">Data od</label>
+                    <input type="date" id="filter-start" name="start_date" value="{{ filters.get('start_date', '') }}">
+                </div>
+                <div class="filter-field">
+                    <label for="filter-end">Data do</label>
+                    <input type="date" id="filter-end" name="end_date" value="{{ filters.get('end_date', '') }}">
+                </div>
+                <div class="filter-field span-2">
+                    <label for="filter-search">Szybkie wyszukiwanie</label>
+                    <input type="text" id="filter-search" name="search" placeholder="np. faktura, wykonawca, etap" value="{{ filters.get('search', '') }}">
+                </div>
+                <div class="filter-field">
+                    <label for="filter-categories">Etapy</label>
+                    <select id="filter-categories" name="categories" multiple size="6">
+                        {% for category in categories %}
+                        <option value="{{ category }}" {% if category in filters.get('categories', []) %}selected{% endif %}>{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field">
+                    <label for="filter-types">Typ wydatku</label>
+                    <select id="filter-types" name="expense_types" multiple size="5">
+                        {% for expense_type in expense_types %}
+                        <option value="{{ expense_type }}" {% if expense_type in filters.get('expense_types', []) %}selected{% endif %}>{{ expense_type }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field">
+                    <label for="filter-banks">Bank</label>
+                    <select id="filter-banks" name="banks" multiple size="5">
+                        {% for bank in banks %}
+                        <option value="{{ bank }}" {% if bank in filters.get('banks', []) %}selected{% endif %}>{{ bank }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field">
+                    <label for="filter-merchants">Kontrahenci</label>
+                    <select id="filter-merchants" name="merchants" multiple size="5">
+                        {% for merchant in merchants %}
+                        <option value="{{ merchant }}" {% if merchant in filters.get('merchants', []) %}selected{% endif %}>{{ merchant }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field">
+                    <label for="filter-min">Kwota od (PLN)</label>
+                    <input type="number" step="0.01" id="filter-min" name="min_amount" value="{{ filters.get('min_amount', '') }}">
+                </div>
+                <div class="filter-field">
+                    <label for="filter-max">Kwota do (PLN)</label>
+                    <input type="number" step="0.01" id="filter-max" name="max_amount" value="{{ filters.get('max_amount', '') }}">
+                </div>
+                <div class="filter-field">
+                    <label for="filter-attachment">Załączniki</label>
+                    <select id="filter-attachment" name="attachment">
+                        <option value="" {% if not filters.get('attachment') %}selected{% endif %}>Wszystkie</option>
+                        <option value="with" {% if filters.get('attachment') == 'with' %}selected{% endif %}>Tylko z załącznikami</option>
+                        <option value="without" {% if filters.get('attachment') == 'without' %}selected{% endif %}>Bez załączników</option>
+                    </select>
+                </div>
+                <div class="filter-actions span-2">
+                    <button type="submit" class="button primary" id="applyFilters">Zastosuj</button>
+                    <button type="button" class="button ghost" id="resetFilters">Wyczyść</button>
+                </div>
+                <div class="filter-options span-2">
+                    <label class="option-row">
+                        <input type="checkbox" id="liveMode">
+                        <span>Tryb LIVE – aktualizuj wizualizacje na podstawie zaznaczonych wierszy</span>
+                    </label>
+                    <label class="option-row">
+                        <input type="checkbox" id="includeCharts" checked>
+                        <span>Dołącz wykresy do eksportu PDF</span>
+                    </label>
+                </div>
+            </form>
         </div>
-        <canvas id="stageChart" height="220"></canvas>
-    </div>
-    <div class="chart-card card glass">
-        <div class="chart-header">
-            <h3>Typy wydatków</h3>
-            <p class="muted">Które kategorie pochłaniają największy budżet.</p>
+        <div class="report-summary card glass">
+            <h3>Podsumowanie tekstowe</h3>
+            <ul id="summaryList" class="summary-list"></ul>
+            <div class="insights-grid">
+                <div>
+                    <h4>Top kontrahenci</h4>
+                    <ul id="merchantList" class="summary-list"></ul>
+                </div>
+                <div>
+                    <h4>Top źródła finansowania</h4>
+                    <ul id="bankList" class="summary-list"></ul>
+                </div>
+            </div>
         </div>
-        <canvas id="typeChart" height="220"></canvas>
     </div>
-    <div class="chart-card card glass wide">
-        <div class="chart-header">
-            <h3>Wydatki miesięczne</h3>
-            <p class="muted">Dynamika wydatków w kolejnych miesiącach.</p>
+    <div class="reports-column">
+        <div class="report-actions card glass">
+            <div class="actions-left">
+                <button type="button" class="button primary" id="downloadPdf">Pobierz raport PDF</button>
+                <button type="button" class="button" id="exportExcel">Eksportuj do Excel</button>
+                <button type="button" class="button ghost" id="printReport">Drukuj</button>
+            </div>
+            <div class="actions-right">
+                <span class="muted small">Eksport obejmuje aktywny zestaw danych. Wybierz wiersze, aby wygenerować raport wyłącznie dla nich.</span>
+            </div>
         </div>
-        <canvas id="timelineChart" height="260"></canvas>
+        <div class="reports-grid">
+            <div class="chart-card card glass">
+                <div class="chart-header">
+                    <h3>Wydatki według etapów</h3>
+                    <p class="muted">Porównanie kosztów pomiędzy etapami inwestycji.</p>
+                </div>
+                <canvas id="stageChart" height="240"></canvas>
+            </div>
+            <div class="chart-card card glass">
+                <div class="chart-header">
+                    <h3>Typy wydatków</h3>
+                    <p class="muted">Struktura kosztów według rodzaju wydatku.</p>
+                </div>
+                <canvas id="typeChart" height="240"></canvas>
+            </div>
+            <div class="chart-card card glass wide">
+                <div class="chart-header">
+                    <h3>Aktywność miesięczna</h3>
+                    <p class="muted">Dynamika wydatków w ujęciu czasowym.</p>
+                </div>
+                <canvas id="timelineChart" height="260"></canvas>
+            </div>
+        </div>
+        <div class="live-report card glass">
+            <div class="chart-header">
+                <h3>Multimedialny raport LIVE</h3>
+                <p class="muted">Zaznacz wiersze w tabeli, aby zobaczyć interaktywną infografikę reagującą w czasie rzeczywistym.</p>
+            </div>
+            <div class="live-content">
+                <div class="live-chart">
+                    <canvas id="liveChart" height="320"></canvas>
+                </div>
+                <div class="live-summary">
+                    <h4>Wybrane dane</h4>
+                    <ul id="liveSummaryList" class="summary-list"></ul>
+                </div>
+            </div>
+        </div>
     </div>
+</section>
+
+<section class="report-table card glass">
+    <div class="table-header">
+        <div>
+            <h3>Rejestr pozycji w raporcie</h3>
+            <p class="muted small">Tabela wspiera sortowanie, wyszukiwanie, zaznaczanie i przenoszenie kolumn. Możesz też przeciągać wiersze, by stworzyć własną kolejność.</p>
+        </div>
+        <div class="table-actions">
+            <button type="button" class="button" id="clearSelection">Wyczyść zaznaczenie</button>
+        </div>
+    </div>
+    <div id="reportTable" class="table-container" aria-live="polite"></div>
 </section>
 {% endblock %}
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-TdaIr05oig3NbS5FHYE97mOgNstsg12uVeOzY9iSdbBw2ALVfTpNjpMRylI3iAFQ" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.2/dist/js/tabulator.min.js" integrity="sha384-pmeE0pvHFtvBi7LKMpkrgg8p9dFSczqZz7rHh9Q4WYSZL5bdy11P0gd4Cb4RNKJP" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-LAIXazhbugzuDUFcPRl1BDpRP70dNDO7xjoMnIKh4j/wcgUp3NEPoPFcAckU4iig" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-/F+SXnq7P6/h1J9vYh3Y2yQtjcBnpJ+IHwPcPjnwvdoX2S61wqcV8szZCwXTlzAIXazhbugzuDUFcPRl1BDpRP70dNDO7xjoMnIKh4j/wcgUp3NEPoPFcAckU4iig" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js" integrity="sha512-aXwSgsC/K1I+uCOBmFcRAgjkYqFoX+0Gooy2cwrRez2oJ6TP2PzefDs2fzGEylh4G6dkprdFM5lTyBC0bYKT1A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-const stageLabels = {{ stage_labels|tojson }};
-const stageValues = {{ stage_values|tojson }};
-const typeLabels = {{ type_labels|tojson }};
-const typeValues = {{ type_values|tojson }};
-const monthLabels = {{ month_labels|tojson }};
-const monthValues = {{ month_values|tojson }};
+const initialPayload = {{ report_payload|tojson }};
+const stageOrder = {{ categories|tojson }};
+const typeOrder = {{ expense_types|tojson }};
 
-const palette = ['#38bdf8', '#0ea5e9', '#22d3ee', '#a855f7', '#f97316', '#facc15'];
-Chart.defaults.color = '#cbd5f5';
-Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
-const commonAnimation = {
-    duration: 900,
-    easing: 'easeOutQuart',
-};
+(() => {
+    const { jsPDF } = window.jspdf || {};
+    const filtersForm = document.getElementById('reportFilters');
+    const summaryList = document.getElementById('summaryList');
+    const merchantList = document.getElementById('merchantList');
+    const bankList = document.getElementById('bankList');
+    const liveSummaryList = document.getElementById('liveSummaryList');
+    const liveModeToggle = document.getElementById('liveMode');
+    const includeChartsToggle = document.getElementById('includeCharts');
+    const tableContainer = document.getElementById('reportTable');
+    const clearSelectionButton = document.getElementById('clearSelection');
+    const exportExcelButton = document.getElementById('exportExcel');
+    const downloadPdfButton = document.getElementById('downloadPdf');
+    const printButton = document.getElementById('printReport');
 
-const stageCtx = document.getElementById('stageChart');
-if (stageCtx) {
-    new Chart(stageCtx, {
-        type: 'bar',
-        data: {
-            labels: stageLabels,
-            datasets: [{
-                label: 'Suma wydatków (PLN)',
-                data: stageValues,
-                backgroundColor: palette,
-            }],
-        },
-        options: {
-            animation: commonAnimation,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: '#e2e8f0' },
-                    grid: { color: 'rgba(148, 163, 184, 0.25)' },
+    const statTotal = document.getElementById('statTotal');
+    const statCount = document.getElementById('statCount');
+    const statStage = document.getElementById('statStage');
+    const statType = document.getElementById('statType');
+
+    let stageChart;
+    let typeChart;
+    let timelineChart;
+    let liveChart;
+    let reportTable;
+    let currentPayload = initialPayload;
+    let currentSelection = [];
+
+    Chart.defaults.color = '#1e293b';
+    Chart.defaults.font.family = 'Segoe UI, Tahoma, sans-serif';
+
+    function formatCurrency(value) {
+        const numeric = Number(value) || 0;
+        return numeric.toLocaleString('pl-PL', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }) + ' PLN';
+    }
+
+    function formatLabelList(items) {
+        return items.map((item) => `${item.label} — ${formatCurrency(item.total)}`);
+    }
+
+    function updateHero(aggregates) {
+        const total = aggregates.total_spent || 0;
+        const count = aggregates.total_count || 0;
+        statTotal.textContent = formatCurrency(total);
+        statCount.textContent = `${count} ${count === 1 ? 'pozycja' : 'pozycji'}`;
+
+        const stages = Object.entries(aggregates.stage_totals || {}).sort((a, b) => b[1] - a[1]);
+        if (stages.length) {
+            statStage.textContent = `${stages[0][0]} · ${formatCurrency(stages[0][1])}`;
+        } else {
+            statStage.textContent = '-';
+        }
+
+        const types = Object.entries(aggregates.type_totals || {}).sort((a, b) => b[1] - a[1]);
+        if (types.length) {
+            statType.textContent = `${types[0][0]} · ${formatCurrency(types[0][1])}`;
+        } else {
+            statType.textContent = '-';
+        }
+    }
+
+    function renderSummary(lines) {
+        summaryList.innerHTML = '';
+        lines.forEach((line) => {
+            const li = document.createElement('li');
+            li.textContent = line;
+            summaryList.appendChild(li);
+        });
+    }
+
+    function renderInsights(aggregates) {
+        merchantList.innerHTML = '';
+        const merchantLines = formatLabelList(aggregates.top_merchants || []);
+        if (merchantLines.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Brak danych.';
+            merchantList.appendChild(li);
+        } else {
+            merchantLines.forEach((text) => {
+                const li = document.createElement('li');
+                li.textContent = text;
+                merchantList.appendChild(li);
+            });
+        }
+
+        bankList.innerHTML = '';
+        const bankLines = formatLabelList(aggregates.top_banks || []);
+        if (bankLines.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Brak danych.';
+            bankList.appendChild(li);
+        } else {
+            bankLines.forEach((text) => {
+                const li = document.createElement('li');
+                li.textContent = text;
+                bankList.appendChild(li);
+            });
+        }
+    }
+
+    function computeAggregatesFromRows(rows) {
+        const stage = {};
+        const type = {};
+        const month = {};
+        const merchants = {};
+        const banks = {};
+        let total = 0;
+
+        rows.forEach((row) => {
+            const amount = Number(row.amount) || 0;
+            total += amount;
+            const stageKey = row.category || 'Nieznany etap';
+            stage[stageKey] = (stage[stageKey] || 0) + amount;
+            const typeKey = row.expense_type || 'Inne';
+            type[typeKey] = (type[typeKey] || 0) + amount;
+            const monthKey = (row.expense_date || '').substring(0, 7) || 'Brak daty';
+            month[monthKey] = (month[monthKey] || 0) + amount;
+            const merchantKey = row.merchant || 'Brak danych';
+            merchants[merchantKey] = (merchants[merchantKey] || 0) + amount;
+            const bankKey = row.bank || 'Brak danych';
+            banks[bankKey] = (banks[bankKey] || 0) + amount;
+        });
+
+        const toArray = (obj) => Object.entries(obj).map(([label, value]) => ({ label, total: value }));
+
+        return {
+            total_spent: total,
+            total_count: rows.length,
+            stage_totals: stage,
+            type_totals: type,
+            monthly_totals: Object.keys(month)
+                .sort()
+                .map((key) => ({ month: key, total: month[key] })),
+            top_merchants: toArray(merchants).sort((a, b) => b.total - a.total).slice(0, 5),
+            top_banks: toArray(banks).sort((a, b) => b.total - a.total).slice(0, 5),
+        };
+    }
+
+    function updateLiveSummary(rows) {
+        liveSummaryList.innerHTML = '';
+        if (!rows.length) {
+            const li = document.createElement('li');
+            li.textContent = 'Zaznacz pozycje w tabeli, aby zobaczyć szczegóły.';
+            liveSummaryList.appendChild(li);
+            return;
+        }
+
+        const aggregates = computeAggregatesFromRows(rows);
+        const lines = [
+            `Pozycji: ${aggregates.total_count}`,
+            `Łączna kwota: ${formatCurrency(aggregates.total_spent)}`,
+        ];
+        const stageEntries = Object.entries(aggregates.stage_totals).sort((a, b) => b[1] - a[1]);
+        if (stageEntries.length) {
+            lines.push(`Top etap: ${stageEntries[0][0]} (${formatCurrency(stageEntries[0][1])})`);
+        }
+        const typeEntries = Object.entries(aggregates.type_totals).sort((a, b) => b[1] - a[1]);
+        if (typeEntries.length) {
+            lines.push(`Top typ: ${typeEntries[0][0]} (${formatCurrency(typeEntries[0][1])})`);
+        }
+        lines.forEach((text) => {
+            const li = document.createElement('li');
+            li.textContent = text;
+            liveSummaryList.appendChild(li);
+        });
+        renderLiveChart(aggregates);
+    }
+
+    function renderLiveChart(aggregates) {
+        const ctx = document.getElementById('liveChart');
+        if (!ctx) {
+            return;
+        }
+        const stageTotals = Object.entries(aggregates.stage_totals || {}).sort((a, b) => b[1] - a[1]);
+        const labels = stageTotals.map((item) => item[0]);
+        const data = stageTotals.map((item) => Number(item[1] || 0));
+        const palette = ['#2563eb', '#f97316', '#10b981', '#a855f7', '#f59e0b', '#0ea5e9'];
+
+        if (liveChart) {
+            liveChart.data.labels = labels;
+            liveChart.data.datasets[0].data = data;
+            liveChart.update();
+            return;
+        }
+
+        liveChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'LIVE',
+                        data,
+                        backgroundColor: palette,
+                        hoverOffset: 18,
+                        borderWidth: 6,
+                        borderColor: 'rgba(255, 255, 255, 0.75)',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                cutout: '55%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                const value = context.parsed || 0;
+                                return `${context.label}: ${formatCurrency(value)}`;
+                            },
+                        },
+                    },
                 },
-                x: {
-                    ticks: { color: '#e2e8f0' },
-                    grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                animation: {
+                    duration: 900,
+                    easing: 'easeOutQuart',
                 },
             },
-            plugins: {
-                legend: {
-                    labels: { color: '#e2e8f0' },
-                },
+        });
+    }
+
+    function renderCharts(aggregates) {
+        const stageCtx = document.getElementById('stageChart');
+        const typeCtx = document.getElementById('typeChart');
+        const timelineCtx = document.getElementById('timelineChart');
+
+        const palette = ['#2563eb', '#f97316', '#10b981', '#a855f7', '#f59e0b', '#0ea5e9'];
+
+        const stageTotals = aggregates.stage_totals || {};
+        const stageLabels = [
+            ...stageOrder.filter((label) => Object.prototype.hasOwnProperty.call(stageTotals, label)),
+            ...Object.keys(stageTotals).filter((label) => !stageOrder.includes(label)),
+        ];
+        const stageValues = stageLabels.map((label) => Number(stageTotals[label] || 0));
+
+        if (stageCtx) {
+            if (!stageChart) {
+                stageChart = new Chart(stageCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: stageLabels,
+                        datasets: [
+                            {
+                                label: 'Kwota (PLN)',
+                                data: stageValues,
+                                backgroundColor: palette,
+                                borderRadius: 6,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        animation: { duration: 800, easing: 'easeOutQuart' },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback(value) {
+                                        return value.toLocaleString('pl-PL');
+                                    },
+                                },
+                                grid: { color: 'rgba(148, 163, 184, 0.25)' },
+                            },
+                            x: {
+                                grid: { display: false },
+                            },
+                        },
+                    },
+                });
+            } else {
+                stageChart.data.labels = stageLabels;
+                stageChart.data.datasets[0].data = stageValues;
+                stageChart.update();
+            }
+        }
+
+        const typeTotals = aggregates.type_totals || {};
+        const typeLabels = [
+            ...typeOrder.filter((label) => Object.prototype.hasOwnProperty.call(typeTotals, label)),
+            ...Object.keys(typeTotals).filter((label) => !typeOrder.includes(label)),
+        ];
+        const typeValues = typeLabels.map((label) => Number(typeTotals[label] || 0));
+
+        if (typeCtx) {
+            if (!typeChart) {
+                typeChart = new Chart(typeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: typeLabels,
+                        datasets: [
+                            {
+                                data: typeValues,
+                                backgroundColor: palette,
+                                hoverOffset: 12,
+                            },
+                        ],
+                    },
+                    options: {
+                        cutout: '55%',
+                        animation: { duration: 900, easing: 'easeOutQuart' },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label(context) {
+                                        const value = context.parsed || 0;
+                                        return `${context.label}: ${formatCurrency(value)}`;
+                                    },
+                                },
+                            },
+                        },
+                    },
+                });
+            } else {
+                typeChart.data.labels = typeLabels;
+                typeChart.data.datasets[0].data = typeValues;
+                typeChart.update();
+            }
+        }
+
+        const months = (aggregates.monthly_totals || []).map((row) => row.month);
+        const monthValues = (aggregates.monthly_totals || []).map((row) => Number(row.total || 0));
+
+        if (timelineCtx) {
+            if (!timelineChart) {
+                timelineChart = new Chart(timelineCtx, {
+                    type: 'line',
+                    data: {
+                        labels: months,
+                        datasets: [
+                            {
+                                label: 'Kwota (PLN)',
+                                data: monthValues,
+                                borderColor: '#2563eb',
+                                backgroundColor: 'rgba(37, 99, 235, 0.2)',
+                                fill: true,
+                                tension: 0.35,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#1d4ed8',
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        animation: { duration: 800, easing: 'easeOutQuart' },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback(value) {
+                                        return value.toLocaleString('pl-PL');
+                                    },
+                                },
+                                grid: { color: 'rgba(148, 163, 184, 0.2)' },
+                            },
+                        },
+                    },
+                });
+            } else {
+                timelineChart.data.labels = months;
+                timelineChart.data.datasets[0].data = monthValues;
+                timelineChart.update();
+            }
+        }
+    }
+
+    function initTable(rows) {
+        if (!tableContainer) {
+            return;
+        }
+
+        if (reportTable) {
+            reportTable.replaceData(rows);
+            reportTable.clearSort();
+            reportTable.deselectRow();
+            return;
+        }
+
+        reportTable = new Tabulator(tableContainer, {
+            data: rows,
+            layout: 'fitColumns',
+            pagination: false,
+            movableColumns: true,
+            movableRows: true,
+            height: '500px',
+            selectable: true,
+            columnDefaults: {
+                headerSortTristate: true,
             },
-        },
+            columns: [
+                { title: 'Data', field: 'expense_date', sorter: 'date', width: 110 },
+                { title: 'Kontrahent', field: 'merchant', sorter: 'string', widthGrow: 1 },
+                { title: 'Etap', field: 'category', sorter: 'string', width: 130 },
+                { title: 'Typ', field: 'expense_type', sorter: 'string', width: 130 },
+                {
+                    title: 'Kwota (PLN)',
+                    field: 'amount',
+                    sorter: 'number',
+                    hozAlign: 'right',
+                    width: 130,
+                    formatter(cell) {
+                        return formatCurrency(cell.getValue());
+                    },
+                },
+                { title: 'Bank', field: 'bank', sorter: 'string', width: 150 },
+                { title: 'Notatki', field: 'notes', sorter: 'string', widthGrow: 1 },
+                { title: 'Opis', field: 'description', sorter: 'string', widthGrow: 1 },
+                {
+                    title: 'Załącznik',
+                    field: 'has_attachment',
+                    sorter: 'boolean',
+                    width: 110,
+                    formatter(cell) {
+                        return cell.getValue() ? 'Dostępny' : '-';
+                    },
+                },
+            ],
+        });
+
+        reportTable.on('rowSelectionChanged', (data) => {
+            currentSelection = data;
+            if (liveModeToggle.checked) {
+                updateLiveSummary(data);
+            }
+        });
+
+        reportTable.on('dataChanged', () => {
+            currentSelection = [];
+            updateLiveSummary([]);
+        });
+    }
+
+    function getActiveRows() {
+        if (liveModeToggle.checked && currentSelection.length) {
+            return currentSelection;
+        }
+        return reportTable ? reportTable.getData('active') : currentPayload.rows;
+    }
+
+    function syncView(payload) {
+        currentPayload = payload;
+        updateHero(payload.aggregates);
+        renderSummary(payload.summary_lines || []);
+        renderInsights(payload.aggregates || {});
+        renderCharts(payload.aggregates || {});
+        renderLiveChart(payload.aggregates || {});
+        initTable(payload.rows || []);
+        updateLiveSummary([]);
+        currentSelection = [];
+    }
+
+    async function fetchReportData(queryString) {
+        const response = await fetch(`/api/reports/data?${queryString}`, {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) {
+            throw new Error('Nie udało się odczytać danych raportu.');
+        }
+        return response.json();
+    }
+
+    function buildQueryFromForm(form) {
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [key, value] of formData.entries()) {
+            if (!value) {
+                continue;
+            }
+            if (params.has(key)) {
+                params.append(key, value);
+            } else {
+                params.set(key, value);
+            }
+        }
+
+        // Multi-selects are grouped under the same name; ensure all selected values are captured.
+        form.querySelectorAll('select[multiple]').forEach((select) => {
+            const name = select.name;
+            params.delete(name);
+            Array.from(select.selectedOptions).forEach((option) => {
+                params.append(name, option.value);
+            });
+        });
+
+        return params.toString();
+    }
+
+    function updateQueryInLocation(query) {
+        const basePath = window.location.pathname;
+        const newUrl = query ? `${basePath}?${query}` : basePath;
+        window.history.replaceState({}, '', newUrl);
+    }
+
+    filtersForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+            const query = buildQueryFromForm(filtersForm);
+            const payload = await fetchReportData(query);
+            syncView(payload);
+            updateQueryInLocation(query);
+        } catch (error) {
+            alert(error.message || 'Nie udało się odświeżyć raportu.');
+        }
     });
-}
 
-const typeCtx = document.getElementById('typeChart');
-if (typeCtx) {
-    new Chart(typeCtx, {
-        type: 'doughnut',
-        data: {
-            labels: typeLabels,
-            datasets: [{
-                data: typeValues,
-                backgroundColor: palette,
-            }],
-        },
-        options: {
-            animation: commonAnimation,
-        },
+    document.getElementById('resetFilters').addEventListener('click', async () => {
+        filtersForm.reset();
+        try {
+            const payload = await fetchReportData('');
+            syncView(payload);
+            updateQueryInLocation('');
+        } catch (error) {
+            alert(error.message || 'Nie udało się zresetować raportu.');
+        }
     });
-}
 
-const timelineCtx = document.getElementById('timelineChart');
-if (timelineCtx) {
-    new Chart(timelineCtx, {
-        type: 'line',
-        data: {
-            labels: monthLabels,
-            datasets: [{
-                label: 'Suma wydatków (PLN)',
-                data: monthValues,
-                borderColor: '#1f6feb',
-                backgroundColor: 'rgba(31, 111, 235, 0.15)',
-                tension: 0.3,
-                fill: true,
-            }],
-        },
-        options: {
-            animation: commonAnimation,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: '#e2e8f0' },
-                    grid: { color: 'rgba(148, 163, 184, 0.25)' },
-                },
-                x: {
-                    ticks: { color: '#e2e8f0' },
-                    grid: { color: 'rgba(148, 163, 184, 0.15)' },
-                },
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#e2e8f0' },
-                },
-            },
-        },
+    liveModeToggle.addEventListener('change', () => {
+        if (liveModeToggle.checked) {
+            if (currentSelection.length) {
+                updateLiveSummary(currentSelection);
+            } else {
+                updateLiveSummary([]);
+            }
+        } else {
+            updateLiveSummary([]);
+            renderLiveChart(currentPayload.aggregates || {});
+        }
     });
-}
+
+    clearSelectionButton.addEventListener('click', () => {
+        if (reportTable) {
+            reportTable.deselectRow();
+        }
+        currentSelection = [];
+        updateLiveSummary([]);
+    });
+
+    exportExcelButton.addEventListener('click', () => {
+        if (!reportTable) {
+            return;
+        }
+        const hasSelection = reportTable.getSelectedRows().length > 0;
+        const fileName = `raport_wydatkow_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        reportTable.download('xlsx', fileName, {
+            sheetName: 'Raport',
+            rowRange: hasSelection ? 'selected' : 'active',
+        });
+    });
+
+    downloadPdfButton.addEventListener('click', () => {
+        if (!jsPDF) {
+            alert('Biblioteka jsPDF nie została załadowana.');
+            return;
+        }
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const marginLeft = 14;
+        let cursorY = 20;
+        doc.setFontSize(18);
+        doc.text('Raport wydatków', marginLeft, cursorY);
+        cursorY += 8;
+        doc.setFontSize(11);
+        doc.text(`Wygenerowano: ${new Date().toLocaleString('pl-PL')}`, marginLeft, cursorY);
+        cursorY += 7;
+        doc.setFontSize(10);
+        (currentPayload.summary_lines || []).forEach((line) => {
+            doc.text(line, marginLeft, cursorY, { maxWidth: 180 });
+            cursorY += 6;
+        });
+        cursorY += 4;
+
+        const activeRows = getActiveRows();
+        const tableBody = activeRows.map((row) => [
+            row.expense_date || '-',
+            row.merchant || '-',
+            row.category || '-',
+            row.expense_type || '-',
+            formatCurrency(row.amount),
+            row.bank || '-',
+            row.notes || '-',
+            row.description || '-',
+        ]);
+
+        doc.autoTable({
+            startY: cursorY,
+            head: [['Data', 'Kontrahent', 'Etap', 'Typ', 'Kwota', 'Bank', 'Notatki', 'Opis']],
+            body: tableBody,
+            styles: { fontSize: 9, cellPadding: 1.8 },
+            headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+            theme: 'grid',
+            margin: { left: marginLeft, right: 14 },
+        });
+
+        if (includeChartsToggle.checked) {
+            const charts = [stageChart, typeChart, timelineChart];
+            charts.forEach((chart) => {
+                if (!chart) {
+                    return;
+                }
+                const img = chart.toBase64Image('image/png', 1);
+                doc.addPage();
+                doc.addImage(img, 'PNG', marginLeft, 30, 180, 110);
+            });
+        }
+
+        doc.save(`raport_wydatkow_${new Date().toISOString().slice(0, 10)}.pdf`);
+    });
+
+    printButton.addEventListener('click', () => {
+        window.print();
+    });
+
+    // Inicjalizacja widoku na podstawie danych startowych przekazanych z backendu.
+    syncView(initialPayload);
+})();
 </script>
 {% endblock %}

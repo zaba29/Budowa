@@ -50,7 +50,7 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
 - Do każdego wydatku możesz dołączyć paragon lub fakturę (PDF, zdjęcie). Informacja „Zdjęcie dostępne” pojawia się w historii i pozwala pobrać plik jednym kliknięciem.
 - Import i eksport korzystają z formatu `.csv` z nagłówkami w pierwszym wierszu: `Data`, `Odbiorca`, `Kwota`, `Etap`, `Typ wydatku`, `Notatki`, `Bank`, `Opis`.
 - Eksport jednym kliknięciem zapisuje wszystkie wydatki w pliku `wydatki_budowa.csv` (kodowanie UTF-8 z BOM), który otworzysz w Excelu lub Numbers.
-- Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz odświeżona strona raportów z animowanymi wykresami (Chart.js).
+- Panel administracyjny do zarządzania użytkownikami i uprawnieniami oraz zaawansowane centrum raportów z filtrowaniem wielokryterialnym, interaktywnymi wykresami (Chart.js), tabelą z przeciąganiem kolumn/wierszy (Tabulator) i eksportem do PDF lub Excel.
 
 ## Import/eksport danych – krok po kroku
 
@@ -71,6 +71,18 @@ Dane są przechowywane w pliku `expenses.db` w katalogu projektu.
    - Przejdź do zakładki **Historia wydatków** i kliknij **Importuj dane**.
    - Wybierz zakładkę **Plik CSV**, wskaż przygotowany plik `.csv` i potwierdź import **lub** wybierz zakładkę **Kopiuj / wklej z Excela**, skopiuj wiersze (razem z nagłówkiem) bezpośrednio z Excela i wklej w oknie dialogowym.
    - Po zatwierdzeniu aplikacja poda liczbę dodanych pozycji oraz informację o ewentualnych pominiętych wierszach (np. z brakującymi danymi).
+
+## Generowanie raportów i wykresów
+
+1. **Wejdź do zakładki „Raporty”.** Górny panel pokazuje łączną kwotę, najdroższy etap oraz dominujący typ wydatku.
+2. **Skonfiguruj filtry.** W lewej kolumnie wybierzesz zakres dat, etapy (ETAP 0–5), typy wydatków, banki, kontrahentów, przedziały kwotowe oraz opcję ograniczenia do pozycji z/bez załączników. Po kliknięciu **Zastosuj** wszystkie wykresy, podsumowania i tabela z wynikami odświeżą się.
+3. **Korzystaj z tabeli wyników.** Tabela umożliwia sortowanie wielu kolumn, zaznaczanie wierszy, przeciąganie kolumn i wierszy oraz szybkie wyszukiwanie (pole „Szybkie wyszukiwanie” nad filtrami).
+4. **Eksportuj raport.**
+   - **PDF** – kliknij **Pobierz raport PDF**, aby wygenerować czytelny raport tekstowy z tabelą danych i (opcjonalnie) wykresami. Plik nadaje się do wydruku i wysyłki do kontrahentów.
+   - **Excel (XLSX)** – przycisk **Eksportuj do Excel** zapisuje aktualny widok tabeli w formacie obsługiwanym przez Excel/Numbers. Jeśli zaznaczysz konkretne wiersze, eksport obejmie tylko wybrane pozycje.
+   - **Druk** – przycisk **Drukuj** otwiera podgląd drukowania w przeglądarce z aktualnym układem raportu.
+5. **Tryb LIVE.** Zaznacz pole „Tryb LIVE”, a następnie klikaj wiersze w tabeli. Interaktywna infografika i podsumowanie „Wybrane dane” z boku będą aktualizować się w czasie rzeczywistym, prezentując tylko wskazane pozycje.
+6. **Animowane wizualizacje.** Trzy podstawowe wykresy (etapy, typy, aktywność miesięczna) oraz kołowy wykres LIVE bazują na bibliotece Chart.js – reagują na zmiany filtrów oraz zaznaczenia.
 
 ## Instrukcja krok po kroku dla macOS (dla początkujących)
 
