@@ -1,0 +1,428 @@
+function setupEditDialog() {
+    const dialog = document.getElementById('edit-dialog');
+    if (!dialog) {
+        return;
+    }
+
+    const form = document.getElementById('edit-expense-form');
+    const cancelButton = document.getElementById('cancel-edit');
+    const currentAttachment = document.getElementById('current-attachment');
+    const currentAttachmentName = document.getElementById('current-attachment-name');
+    const currentAttachmentLink = document.getElementById('current-attachment-link');
+    const removeAttachment = document.getElementById('edit_remove_attachment');
+    const attachmentInput = document.getElementById('edit_attachment');
+
+    if (form) {
+        form.addEventListener('submit', (event) => {
+            if (!form.action) {
+                return;
+            }
+            event.preventDefault();
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton ? submitButton.textContent : '';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Zapisywanie...';
+            }
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            })
+                .then((response) =>
+                    response
+                        .json()
+                        .catch(() => ({}))
+                        .then((data) => ({ response, data })),
+                )
+                .then(({ response, data }) => {
+                    if (!response.ok) {
+                        throw new Error(
+                            (data && data.error) || 'Nie udało się zapisać zmian. Spróbuj ponownie.',
+                        );
+                    }
+
+                    dialog.close();
+
+                    if (data && data.redirect) {
+                        window.location.href = data.redirect;
+                        return;
+                    }
+
+                    if (response.redirected && response.url) {
+                        window.location.href = response.url;
+                        return;
+                    }
+
+                    window.location.reload();
+                })
+                .catch((error) => {
+                    alert(error.message || 'Nie udało się zapisać zmian. Spróbuj ponownie.');
+                })
+                .finally(() => {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.textContent = originalText;
+                    }
+                });
+        });
+    }
+
+    document.querySelectorAll('[data-action="edit"]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const row = button.closest('tr');
+            if (!row) {
+                return;
+            }
+            const payload = row.dataset.expense ? JSON.parse(row.dataset.expense) : {};
+            form.action = row.dataset.updateUrl;
+            form.querySelector('#edit_expense_date').value = payload.expense_date || '';
+            form.querySelector('#edit_merchant').value = payload.merchant || '';
+            form.querySelector('#edit_amount').value = payload.amount !== undefined ? Number(payload.amount).toFixed(2) : '';
+            form.querySelector('#edit_category').value = payload.category || '';
+            form.querySelector('#edit_expense_type').value = payload.expense_type || '';
+            form.querySelector('#edit_notes').value = payload.notes || '';
+            form.querySelector('#edit_bank').value = payload.bank || '';
+            form.querySelector('#edit_description').value = payload.description || '';
+            if (attachmentInput) {
+                attachmentInput.value = '';
+            }
+
+            const hasAttachment = row.dataset.hasAttachment === 'true';
+            const attachmentName = row.dataset.attachmentName || '';
+            const attachmentUrl = row.dataset.attachmentUrl || '';
+
+            if (currentAttachment) {
+                if (hasAttachment) {
+                    currentAttachment.classList.remove('hidden');
+                    if (currentAttachmentName) {
+                        currentAttachmentName.textContent = attachmentName || 'Załącznik';
+                    }
+                    if (currentAttachmentLink) {
+                        currentAttachmentLink.href = attachmentUrl || '#';
+                        currentAttachmentLink.classList.remove('hidden');
+                    }
+                } else {
+                    currentAttachment.classList.add('hidden');
+                    if (currentAttachmentLink) {
+                        currentAttachmentLink.href = '#';
+                        currentAttachmentLink.classList.add('hidden');
+                    }
+                }
+            }
+
+            if (removeAttachment) {
+                removeAttachment.checked = false;
+                removeAttachment.disabled = !hasAttachment;
+            }
+
+            dialog.showModal();
+        });
+    });
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', () => {
+            dialog.close();
+        });
+    }
+
+    if (attachmentInput) {
+        attachmentInput.addEventListener('change', () => {
+            if (attachmentInput.files.length > 0 && removeAttachment) {
+                removeAttachment.checked = false;
+            }
+        });
+    }
+
+    if (removeAttachment) {
+        removeAttachment.addEventListener('change', () => {
+            if (removeAttachment.checked && attachmentInput) {
+                attachmentInput.value = '';
+            }
+        });
+    }
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.draggable-row:not(.dragging)')];
+
+    return draggableElements.reduce(
+        (closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset, element: child };
+            }
+            return closest;
+        },
+        { offset: Number.NEGATIVE_INFINITY, element: null },
+    ).element;
+}
+
+function sendReorder(tbody, url) {
+    const order = [...tbody.querySelectorAll('.draggable-row')].map((row, index) => {
+        row.dataset.position = index;
+        return Number(row.dataset.expenseId);
+    });
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ order }),
+    }).catch(() => {
+        alert('Nie udało się zapisać nowej kolejności. Odśwież stronę i spróbuj ponownie.');
+    });
+}
+
+function setupDragAndDrop() {
+    const table = document.querySelector('[data-expenses-table]');
+    if (!table) {
+        return;
+    }
+
+    const canReorder = table.dataset.canReorder === 'true';
+    if (!canReorder) {
+        return;
+    }
+
+    const reorderUrl = table.dataset.reorderUrl;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) {
+        return;
+    }
+
+    tbody.querySelectorAll('.draggable-row').forEach((row) => {
+        row.setAttribute('draggable', 'true');
+    });
+
+    tbody.addEventListener('dragstart', (event) => {
+        const target = event.target;
+        if (target && target.classList && target.classList.contains('draggable-row')) {
+            target.classList.add('dragging');
+        }
+    });
+
+    tbody.addEventListener('dragend', (event) => {
+        const target = event.target;
+        if (target && target.classList && target.classList.contains('draggable-row')) {
+            target.classList.remove('dragging');
+            sendReorder(tbody, reorderUrl);
+        }
+    });
+
+    tbody.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        const afterElement = getDragAfterElement(tbody, event.clientY);
+        const dragging = tbody.querySelector('.dragging');
+        if (!dragging) {
+            return;
+        }
+        if (afterElement == null) {
+            tbody.appendChild(dragging);
+        } else {
+            tbody.insertBefore(dragging, afterElement);
+        }
+    });
+}
+
+function setupImportDialog() {
+    const trigger = document.querySelector('[data-open-import]');
+    const dialog = document.getElementById('import-dialog');
+    if (!trigger || !dialog) {
+        return;
+    }
+
+    const cancel = document.getElementById('cancel-import');
+    const modeInput = document.getElementById('import-mode');
+    const fileInput = document.getElementById('import-file');
+    const pasteArea = document.getElementById('import-paste');
+    const modeButtons = dialog.querySelectorAll('[data-import-mode]');
+    const panels = dialog.querySelectorAll('[data-import-section]');
+
+    const expectedHeaders = [
+        'Data',
+        'Odbiorca',
+        'Kwota',
+        'Etap',
+        'Typ wydatku',
+        'Notatki',
+        'Bank',
+        'Opis',
+    ];
+
+    const simplify = (value) =>
+        value
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const ensureTabs = (line) => {
+        if (line.includes('\t')) {
+            return line;
+        }
+        return line.replace(/\s{2,}/g, '\t');
+    };
+
+    const tidyAmount = (value) => {
+        if (!value) {
+            return '';
+        }
+        let cleaned = value.replace(/zł|zl|pln/gi, '');
+        cleaned = cleaned.replace(/\s+/g, '');
+        cleaned = cleaned.replace(/,/g, '.');
+        cleaned = cleaned.replace(/(?<=\d)\.(?=\d{3}(?:\D|$))/g, '');
+        return cleaned.trim();
+    };
+
+    const tidyStage = (value) => {
+        if (!value) {
+            return '';
+        }
+        const match = value.match(/etap\s*([0-5])/i);
+        if (match) {
+            return `ETAP ${match[1]}`;
+        }
+        return value.trim();
+    };
+
+    const autoFormatClipboard = (raw) => {
+        if (!raw) {
+            return '';
+        }
+        const normalizedLines = raw
+            .replace(/\r\n?/g, '\n')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line !== '');
+        if (normalizedLines.length === 0) {
+            return '';
+        }
+
+        const firstCells = ensureTabs(normalizedLines[0])
+            .split('\t')
+            .map(simplify);
+        const expectedSimplified = expectedHeaders.map(simplify);
+        const headerMatches = expectedSimplified.every(
+            (expected, index) => firstCells[index] && firstCells[index] === expected,
+        );
+
+        const rows = [];
+        const startIndex = headerMatches ? 1 : 0;
+        for (let i = startIndex; i < normalizedLines.length; i += 1) {
+            const columns = ensureTabs(normalizedLines[i])
+                .split('\t')
+                .map((cell) => cell.trim());
+            while (columns.length < expectedHeaders.length) {
+                columns.push('');
+            }
+            columns.length = expectedHeaders.length;
+            columns[2] = tidyAmount(columns[2]);
+            columns[3] = tidyStage(columns[3]);
+            columns[4] = columns[4] ? columns[4].replace(/\s+/g, ' ').trim() : '';
+            rows.push(columns.join('\t'));
+        }
+
+        const headerLine = expectedHeaders.join('\t');
+        const finalLines = [headerLine, ...rows];
+        return `${finalLines.join('\n')}\n`;
+    };
+
+    const setMode = (mode) => {
+        if (!modeInput) {
+            return;
+        }
+        modeInput.value = mode;
+        modeButtons.forEach((button) => {
+            const isActive = button.dataset.importMode === mode;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+        });
+        panels.forEach((panel) => {
+            const isActive = panel.dataset.importSection === mode;
+            panel.hidden = !isActive;
+            panel.setAttribute('aria-hidden', String(!isActive));
+        });
+        if (fileInput) {
+            if (mode === 'csv') {
+                fileInput.disabled = false;
+                fileInput.required = true;
+            } else {
+                fileInput.disabled = true;
+                fileInput.required = false;
+                fileInput.value = '';
+            }
+        }
+        if (pasteArea) {
+            if (mode === 'clipboard') {
+                pasteArea.disabled = false;
+                pasteArea.required = true;
+                pasteArea.focus();
+                pasteArea.value = autoFormatClipboard(pasteArea.value);
+            } else {
+                pasteArea.value = '';
+                pasteArea.disabled = true;
+                pasteArea.required = false;
+            }
+        }
+    };
+
+    trigger.addEventListener('click', () => {
+        dialog.showModal();
+        setMode(modeInput ? modeInput.value || 'csv' : 'csv');
+    });
+
+    if (cancel) {
+        cancel.addEventListener('click', () => {
+            dialog.close();
+        });
+    }
+
+    modeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const mode = button.dataset.importMode;
+            if (mode) {
+                setMode(mode);
+            }
+        });
+    });
+
+    dialog.addEventListener('close', () => {
+        setMode('csv');
+    });
+
+    setMode(modeInput ? modeInput.value || 'csv' : 'csv');
+
+    if (pasteArea) {
+        pasteArea.addEventListener('paste', (event) => {
+            const clipboardData = event.clipboardData || window.clipboardData;
+            if (!clipboardData) {
+                return;
+            }
+            event.preventDefault();
+            const text = clipboardData.getData('text');
+            pasteArea.value = autoFormatClipboard(text);
+        });
+
+        pasteArea.addEventListener('blur', () => {
+            pasteArea.value = autoFormatClipboard(pasteArea.value);
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupEditDialog();
+    setupDragAndDrop();
+    setupImportDialog();
+});

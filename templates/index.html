@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Panel główny{% endblock %}
+{% block content %}
+<div class="dashboard">
+    <section class="card glass">
+        <div class="section-header">
+            <div>
+                <h2>Dodaj wydatek</h2>
+                <p class="muted">Zapisz koszt i obserwuj jak wpływa na budżet.</p>
+            </div>
+        </div>
+        {% if permissions.get('can_add') %}
+        <form method="post" action="{{ url_for('add_expense') }}" class="form-grid" enctype="multipart/form-data">
+            <label for="expense_date">Data</label>
+            <input type="date" id="expense_date" name="expense_date" required>
+
+            <label for="merchant">Odbiorca</label>
+            <input id="merchant" name="merchant" placeholder="np. Sklep budowlany" required>
+
+            <label for="amount">Kwota (PLN)</label>
+            <input type="text" id="amount" name="amount" placeholder="0,00" required>
+
+            <label for="category">Etap</label>
+            <select id="category" name="category" required>
+                <option value="" disabled selected>Wybierz etap</option>
+                {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="expense_type">Typ wydatku</label>
+            <select id="expense_type" name="expense_type" required>
+                <option value="" disabled selected>Wybierz typ</option>
+                {% for expense_type in expense_types %}
+                <option value="{{ expense_type }}">{{ expense_type }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="notes">Notatki</label>
+            <input id="notes" name="notes" placeholder="krótka notatka">
+
+            <label for="bank">Bank / forma płatności</label>
+            <input id="bank" name="bank" placeholder="np. Gotówka, Alior Bank">
+
+            <label for="description">Opis szczegółowy</label>
+            <textarea id="description" name="description" rows="2" placeholder="szczegóły wydatku"></textarea>
+
+            <label for="attachment">Paragon / faktura (opcjonalnie)</label>
+            <input type="file" id="attachment" name="attachment" accept=".pdf,image/*">
+            <p class="form-note">Obsługiwane formaty: PDF, JPG, PNG, WEBP, HEIC (do 10&nbsp;MB).</p>
+
+            <button type="submit" class="button primary full-width">Zapisz</button>
+        </form>
+        {% else %}
+        <p class="muted">Nie masz uprawnień do dodawania nowych wydatków.</p>
+        {% endif %}
+    </section>
+
+    <aside class="card glass summary">
+        <div class="section-header">
+            <div>
+                <h2>Podsumowanie budżetu</h2>
+                <p class="muted">Szybki wgląd w koszty według etapów i typów wydatków.</p>
+            </div>
+        </div>
+        <p class="total">Łącznie: <strong>{{ '%.2f'|format(total_cost) }} PLN</strong></p>
+
+        <div class="summary-columns">
+            <div>
+                <h3>Według etapu</h3>
+                <ul>
+                    {% for category in categories %}
+                    <li>
+                        <span>{{ category }}</span>
+                        <strong>{{ '%.2f'|format(category_totals.get(category, 0)) }} PLN</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <h3>Według typu</h3>
+                <ul>
+                    {% for label in expense_types %}
+                    <li>
+                        <span>{{ label }}</span>
+                        <strong>{{ '%.2f'|format(type_totals.get(label, 0)) }} PLN</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <a href="{{ url_for('history') }}" class="button outline full-width">Przejdź do historii wydatków</a>
+    </aside>
+</div>
+{% endblock %}
